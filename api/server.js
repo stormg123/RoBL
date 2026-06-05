@@ -299,16 +299,16 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
             sendEvent('text', { text: cleanText, recommendations });
             sendEvent('complete', { success: true, plan: true, totalTime });
         } else {
-            // Intent classification — is this a build request or casual chat?
-            const intentPrompt = `Reply ONLY with the word "build" or "chat". Reply "build" if the user wants to CREATE, MAKE, GENERATE, or SCRIPT something in Roblox Studio (like making a sword, creating a door, writing a script, building a game). Reply "chat" ONLY for greetings like "hi", casual conversation, or things completely unrelated to Roblox. Do NOT explain — just one word.
-Examples: "make a sword" → build | "create a door" → build | "write a script" → build | "hi" → chat | "what can you do" → chat
+            // Intent classification — build request / Studio command or casual chat?
+            const intentPrompt = `Reply ONLY with "build" or "chat". Reply "build" if the user wants to CREATE, MAKE, GENERATE, SCRIPT, or DO something in Roblox Studio (making a sword, duplicating a part, playtesting, cloning, editing terrain, etc). Reply "chat" ONLY for greetings, casual conversation, or things completely unrelated to Roblox. Do NOT explain — just one word.
+Examples: "make a sword" → build | "duplicate this" → build | "playtest the game" → build | "clone that part" → build | "hi" → chat
 User: ${prompt}`;
             const intentResponse = await callNVIDIA([
                 { role: 'system', content: 'Output ONLY the single word "build" or "chat" with no other text.' },
                 { role: 'user', content: intentPrompt }
             ], apiKey, model, 10);
             const isBuild = intentResponse.trim().toLowerCase().startsWith('build')
-                || /\b(make|create|build|generate|script|code|spawn|add|insert)\b/i.test(prompt);
+                || /\b(make|create|build|generate|script|code|spawn|add|insert|clone|duplicate|playtest|test|run|replicate|copy|edit|modify|delete|remove|move|rotate|scale|paint|color|change)\b/i.test(prompt);
 
             if (!isBuild) {
                 const chatSysPrompt = 'You are a helpful Roblox assistant. Respond conversationally and naturally. Do not generate Lua code.';
@@ -325,14 +325,14 @@ User: ${prompt}`;
 
             // Stage 1: Analyze — real AI analysis
             sendEvent('stage', { id: 'analyze', status: 'active' });
-            const analysisSysPrompt = 'You are a Roblox Studio build planner. Analyze what the user wants built and identify: the key objects to create, which Roblox services are needed, and the main steps the script will perform. Keep it under 3 sentences.';
+            const analysisSysPrompt = 'You are a Roblox Studio AI agent. Analyze what the user wants done and identify: what objects or services are involved, what action to take (create, modify, duplicate, test, etc.), and the approach. Keep it under 3 sentences.';
             const analysisMsg = { role: 'user', content: prompt };
             const analysis = await callNVIDIA([{ role: 'system', content: analysisSysPrompt }, analysisMsg], apiKey, model);
             sendEvent('stage', { id: 'analyze', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
             // Stage 2: Generate — main AI codegen using analysis context
             sendEvent('stage', { id: 'generate', status: 'active' });
-            const codeSysPrompt = 'You are an expert Roblox Lua developer integrated directly into Roblox Studio. Generate complete, production-ready Lua scripts that can be inserted and run immediately. The script must be fully self-contained and able to: manipulate the Studio workspace (move, resize, clone parts), create new instances from scratch (Parts, Scripts, GUI elements, etc.), fetch and insert models from the Roblox Toolbox, modify terrain and lighting, create and configure DataStore connections, and build complete game systems from a single prompt. Only output raw Lua code — no explanations, no markdown wrappers.';
+            const codeSysPrompt = 'You are an expert Roblox Lua developer integrated directly into Roblox Studio. Generate complete, production-ready Lua scripts that can be inserted and run immediately. Handle a wide range of Studio actions: duplicate or clone selected parts, create new instances from scratch (Parts, Scripts, GUI, tools), modify existing objects (move, resize, rotate, color, delete), fetch and insert models from the Toolbox, create playtest-ready scenarios with test harnesses, configure lighting/terrain, set up DataStores, and build complete game systems from a single prompt. Understand natural commands like "duplicate this", "clone that part", "make a copy", "playtest setup", "delete the red parts", etc. Only output raw Lua code — no explanations, no markdown wrappers.';
             const codeMsg = image
                 ? { role: 'user', content: [{ type: 'text', text: `${analysis}\n\nBuild this: ${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
                 : { role: 'user', content: `${analysis}\n\nBuild this: ${prompt}` };
