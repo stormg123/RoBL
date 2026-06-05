@@ -531,6 +531,95 @@ removeImageBtn?.addEventListener('click', () => {
     imageInput.value = ''
 })
 
+// ==================== THINKING STAGES ====================
+let thinkingEl = null
+let stageTimers = {}
+
+function showThinkingStages() {
+    if (thinkingEl) thinkingEl.remove()
+    const el = document.createElement('div')
+    el.className = 'thinking'
+    el.id = 'thinkingContainer'
+    el.innerHTML = `
+        <div class="thinking-header">
+            <span class="thinking-spinner"></span>
+            Processing request...
+        </div>
+        <div class="thinking-stages" id="thinkingStages">
+            <div class="t-stage" data-stage="scan">
+                <span class="t-icon">🔍</span>
+                <span class="t-label">Scanning workspace...</span>
+                <span class="t-status"></span>
+            </div>
+            <div class="t-stage" data-stage="research">
+                <span class="t-icon">📚</span>
+                <span class="t-label">Researching toolbox...</span>
+                <span class="t-status"></span>
+            </div>
+            <div class="t-stage" data-stage="generate">
+                <span class="t-icon">🧠</span>
+                <span class="t-label">Generating Lua code...</span>
+                <span class="t-status"></span>
+            </div>
+            <div class="t-stage" data-stage="validate">
+                <span class="t-icon">🔬</span>
+                <span class="t-label">Validating output...</span>
+                <span class="t-status"></span>
+            </div>
+        </div>
+    `
+    messages.appendChild(el)
+    chatScroll.scrollTop = chatScroll.scrollHeight
+    return el
+}
+
+function updateStage(stageId, status, duration) {
+    const stage = document.querySelector(`.t-stage[data-stage="${stageId}"]`)
+    if (!stage) return
+    const statusEl = stage.querySelector('.t-status')
+    stage.className = 't-stage ' + status
+    if (status === 'active') {
+        const start = Date.now()
+        stageTimers[stageId] = setInterval(() => {
+            const elapsed = ((Date.now() - start) / 1000).toFixed(1)
+            statusEl.textContent = elapsed + 's'
+        }, 100)
+        statusEl.textContent = '...'
+    } else if (status === 'done') {
+        if (stageTimers[stageId]) { clearInterval(stageTimers[stageId]); delete stageTimers[stageId] }
+        statusEl.textContent = '✅ ' + duration + 's'
+    } else if (status === 'error') {
+        if (stageTimers[stageId]) { clearInterval(stageTimers[stageId]); delete stageTimers[stageId] }
+        statusEl.textContent = '❌'
+    }
+}
+
+function removeThinkingStages() {
+    if (thinkingEl) { thinkingEl.remove(); thinkingEl = null }
+    Object.values(stageTimers).forEach(clearInterval)
+    stageTimers = {}
+}
+
+function parseSSEBuffer(buffer) {
+    const events = []
+    const blocks = buffer.split('\n\n')
+    const remaining = blocks.pop() || ''
+    for (const block of blocks) {
+        if (!block.trim()) continue
+        const lines = block.split('\n')
+        let eventType = 'message'
+        let data = ''
+        for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+            else if (line.startsWith('data: ')) data = line.slice(6)
+        }
+        if (data) {
+            try { events.push({ event: eventType, data: JSON.parse(data) }) } catch {}
+        }
+    }
+    return { events, remaining }
+}
+
 // ==================== GENERATE ====================
 async function generate() {
     const p = prompt.value.trim()
@@ -553,18 +642,48 @@ async function generate() {
     sendBtn.disabled = true
     sendBtn.classList.add('loading')
 
+    showThinkingStages()
+
     try {
         const r = await fetch(`${API_BASE}/generate?session=${session}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: p, apiKey: k, model: m, image: imageData }),
+            body: JSON.stringify({ prompt: p, apiKey: k, model: m, image: imageData, stream: true }),
         })
-        const data = await r.json()
-        if (!r.ok) throw new Error(data.error || 'Generation failed')
 
-        addMessage('ai', `✅ Sent to Studio`)
-        toast('Code sent to Roblox Studio', 'success')
+        if (!r.ok) {
+            const errData = await r.json().catch(() => ({}))
+            throw new Error(errData.error || 'Generation failed')
+        }
+
+        const reader = r.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buffer += decoder.decode(value, { stream: true })
+            const { events, remaining } = parseSSEBuffer(buffer)
+            buffer = remaining
+
+            for (const ev of events) {
+                if (ev.event === 'stage') {
+                    updateStage(ev.data.id, ev.data.status, ev.data.duration)
+                    chatScroll.scrollTop = chatScroll.scrollHeight
+                } else if (ev.event === 'complete') {
+                    removeThinkingStages()
+                    addMessage('ai', `✅ Sent to Studio`)
+                    toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
+                } else if (ev.event === 'error') {
+                    removeThinkingStages()
+                    addMessage('ai', `❌ ${ev.data.message}`)
+                    toast(ev.data.message, 'error')
+                }
+            }
+        }
     } catch (err) {
+        removeThinkingStages()
         addMessage('ai', `❌ ${err.message}`)
         toast(err.message, 'error')
     } finally {

@@ -218,11 +218,46 @@ local function createUI()
     connectCorner.CornerRadius = UDim.new(0, 6)
     connectCorner.Parent = connectBtn
 
-    connectBtn.MouseButton1Click:Connect(function()
-        local input = idBox.Text:gsub("%s+", "")
-        if input == "" then
-            log("Enter your Roblox User ID", "error")
+    local function requestPermissionsAndConnect(input)
+        -- Step 1: Show permission dialog
+        local permissionChoice = plugin:Prompt(
+            "RoBl AI — Grant Access",
+            "This plugin needs permission to:\n\n" ..
+            "✏️  Edit your place (create/modify scripts)\n" ..
+            "🌐  Access the internet (fetch AI code)\n\n" ..
+            "Allow RoBl AI to access your place and the web?",
+            Enum.StudioStyleAlertDialogButtons.YesNo
+        )
+
+        if permissionChoice ~= Enum.DialogResult.Yes then
+            log("Permission denied by user", "error")
             return
+        end
+
+        -- Step 2: Try HTTP to trigger Roblox's built-in permission prompt
+        local httpOk = false
+        local pingOk, pingResult = pcall(function()
+            return HttpService:PostAsync(API_BASE .. "/plugin/ping", HttpService:JSONEncode({
+                robloxId = input
+            }), Enum.HttpContentType.ApplicationJson)
+        end)
+        if pingOk then
+            httpOk = true
+            log("Plugin sync ping sent", "success")
+        else
+            -- HTTP permission might be needed; try once more (trigger prompt)
+            log("HTTP permission required — running test request", "error")
+            local retryOk, retryResult = pcall(function()
+                return HttpService:PostAsync(API_BASE .. "/plugin/ping", HttpService:JSONEncode({
+                    robloxId = input
+                }), Enum.HttpContentType.ApplicationJson)
+            end)
+            if retryOk then
+                httpOk = true
+                log("Plugin sync ping sent on retry", "success")
+            else
+                log("HTTP permission still denied. Approve it in Studio settings.", "error")
+            end
         end
 
         robloxId = input
@@ -230,21 +265,10 @@ local function createUI()
         statusLabel.Text = "Status: Connected (" .. robloxId .. ")"
         statusLabel.TextColor3 = Color3.fromRGB(34, 197, 94)
         connectBtn.Text = "Connected"
+        connectBtn.TextColor3 = Color3.fromRGB(15, 15, 18)
         connectBtn.BackgroundColor3 = Color3.fromRGB(34, 197, 94)
         connectBtn.Active = false
         log("Connected as user " .. robloxId, "success")
-
-        -- Ping server to mark plugin as connected
-        local ok, result = pcall(function()
-            return HttpService:PostAsync(API_BASE .. "/plugin/ping", HttpService:JSONEncode({
-                robloxId = robloxId
-            }), Enum.HttpContentType.ApplicationJson)
-        end)
-        if ok then
-            log("Plugin sync ping sent", "success")
-        else
-            log("Failed to ping server for sync", "error")
-        end
 
         -- Start polling
         pollingThread = spawn(function()
@@ -253,6 +277,15 @@ local function createUI()
                 checkForNewCode()
             end
         end)
+    end
+
+    connectBtn.MouseButton1Click:Connect(function()
+        local input = idBox.Text:gsub("%s+", "")
+        if input == "" then
+            log("Enter your Roblox User ID", "error")
+            return
+        end
+        requestPermissionsAndConnect(input)
     end)
 
     -- Check now button

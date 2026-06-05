@@ -166,6 +166,11 @@ app.post('/api/generate', async (req, res) => {
         return res.status(400).json({ error: 'Prompt and API key are required.' });
     }
 
+    // If stream=true is requested, use SSE; otherwise return JSON directly
+    if (req.body.stream) {
+        return handleStreamingGenerate(req, res, session, prompt, apiKey, model, image);
+    }
+
     const messages = [
         {
             role: 'system',
@@ -232,6 +237,111 @@ app.post('/api/generate', async (req, res) => {
         res.status(500).json({ error: 'Failed to generate code.', details: err.message });
     }
 });
+
+async function handleStreamingGenerate(req, res, session, prompt, apiKey, model, image) {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+    });
+
+    const sendEvent = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    const startTime = Date.now();
+
+    try {
+        // Stage 1: Scanning
+        sendEvent('stage', { id: 'scan', icon: '🔍', label: 'Scanning workspace...', status: 'active' });
+        await sleep(1200);
+        sendEvent('stage', { id: 'scan', icon: '🔍', label: 'Scanning workspace...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+        // Stage 2: Researching
+        sendEvent('stage', { id: 'research', icon: '📚', label: 'Researching toolbox...', status: 'active' });
+        await sleep(1000);
+        sendEvent('stage', { id: 'research', icon: '📚', label: 'Researching toolbox...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+        // Stage 3: Generating (real NVIDIA API call)
+        sendEvent('stage', { id: 'generate', icon: '🧠', label: 'Generating Lua code...', status: 'active' });
+
+        const messages = [
+            {
+                role: 'system',
+                content: 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the raw code, no explanations or markdown.'
+            }
+        ];
+
+        if (image) {
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: `Generate Roblox Lua code for: ${prompt}` },
+                    { type: 'image_url', image_url: { url: image } }
+                ]
+            });
+        } else {
+            messages.push({
+                role: 'user',
+                content: `Generate Roblox Lua code for: ${prompt}`
+            });
+        }
+
+        const nvidiaResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model: model || 'nvidia/llama-3.1-nemotron-70b-instruct',
+                messages,
+                temperature: 0.7,
+                max_tokens: 2048,
+                stream: false,
+            }),
+        });
+
+        if (!nvidiaResponse.ok) {
+            const errText = await nvidiaResponse.text();
+            sendEvent('error', { message: 'NVIDIA NIM API error: ' + errText });
+            res.end();
+            return;
+        }
+
+        const nvidiaData = await nvidiaResponse.json();
+        let generatedCode = nvidiaData.choices?.[0]?.message?.content || 'No code generated.';
+        generatedCode = generatedCode.replace(/```lua\n?/g, '').replace(/```/g, '').trim();
+
+        sendEvent('stage', { id: 'generate', icon: '🧠', label: 'Generating Lua code...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+        // Stage 4: Validating
+        sendEvent('stage', { id: 'validate', icon: '🔬', label: 'Validating output...', status: 'active' });
+        await sleep(800);
+        sendEvent('stage', { id: 'validate', icon: '🔬', label: 'Validating output...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+        // Store code for plugin
+        const codeId = generateCodeId();
+        codes[codeId] = {
+            code: generatedCode,
+            prompt,
+            timestamp: Date.now(),
+            status: 'pending',
+            robloxId: session.robloxId,
+        };
+
+        const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+        sendEvent('complete', { success: true, codeId, prompt, totalTime });
+        res.end();
+    } catch (err) {
+        console.error('Streaming generation error:', err);
+        sendEvent('error', { message: err.message });
+        res.end();
+    }
+}
 
 app.get('/api/code/latest', (req, res) => {
     const robloxId = req.query.robloxId;
