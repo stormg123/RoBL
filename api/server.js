@@ -318,23 +318,31 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
 
         sendEvent('stage', { id: 'generate', icon: '🧠', label: 'Generating Lua code...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
+        // In plan mode, send code text to frontend instead of storing for plugin
+        if (req.body.mode === 'plan') {
+            sendEvent('text', { code: generatedCode });
+        }
+
         // Stage 4: Validating
         sendEvent('stage', { id: 'validate', icon: '🔬', label: 'Validating output...', status: 'active' });
         await sleep(800);
         sendEvent('stage', { id: 'validate', icon: '🔬', label: 'Validating output...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
-        // Store code for plugin
-        const codeId = generateCodeId();
-        codes[codeId] = {
-            code: generatedCode,
-            prompt,
-            timestamp: Date.now(),
-            status: 'pending',
-            robloxId: session.robloxId,
-        };
-
+        // Store code for plugin (only in build mode)
         const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-        sendEvent('complete', { success: true, codeId, prompt, totalTime });
+        if (req.body.mode !== 'plan') {
+            const codeId = generateCodeId();
+            codes[codeId] = {
+                code: generatedCode,
+                prompt,
+                timestamp: Date.now(),
+                status: 'pending',
+                robloxId: session.robloxId,
+            };
+            sendEvent('complete', { success: true, codeId, prompt, totalTime });
+        } else {
+            sendEvent('complete', { success: true, plan: true, totalTime });
+        }
         res.end();
     } catch (err) {
         console.error('Streaming generation error:', err);

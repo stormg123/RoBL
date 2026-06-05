@@ -6,6 +6,7 @@ const API_BASE = API_URL + '/api'
 let session = null, user = null, chatId = null, chats = {}, msgCount = 0
 let pluginConnected = false, pluginPollInterval = null, syncPollInterval = null
 let pendingImage = null
+let mode = 'build' // 'plan' or 'build'
 
 const $ = id => document.getElementById(id)
 const auth = $('auth'), sync = $('sync'), dashboard = $('dashboard')
@@ -261,6 +262,23 @@ function updateSyncLock() {
         sendBtn.disabled = true
     }
 }
+
+// ==================== MODE (plan / build) ====================
+function updateModeIndicator() {
+    const el = document.getElementById('modeIndicator')
+    if (!el) return
+    el.textContent = mode === 'plan' ? 'Plan' : 'Build'
+    el.className = 'mode-indicator ' + mode
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && !e.target.matches('textarea, input, select, [contenteditable]')) {
+        e.preventDefault()
+        mode = mode === 'plan' ? 'build' : 'plan'
+        updateModeIndicator()
+        toast(mode === 'plan' ? 'Planning mode — responses shown in chat' : 'Build mode — code sent to Studio', 'info', 2000)
+    }
+})
 
 async function checkPlugin() {
     if (!session) return
@@ -635,7 +653,7 @@ async function generate() {
     if (!p) { toast('Enter a prompt', 'error'); return }
     if (!k) { toast('Enter your NVIDIA NIM API key', 'error'); return }
     if (!session) { toast('You must be logged in', 'error'); return }
-    if (!pluginConnected) { toast('Wait for Studio plugin to connect', 'error'); return }
+    if (!pluginConnected && mode !== 'plan') { toast('Wait for Studio plugin to connect', 'error'); return }
 
     const imageData = pendingImage
     pendingImage = null
@@ -654,7 +672,7 @@ async function generate() {
         const r = await fetch(`${API_BASE}/generate?session=${session}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: p, apiKey: k, model: m, image: imageData, stream: true }),
+            body: JSON.stringify({ prompt: p, apiKey: k, model: m, image: imageData, stream: true, mode }),
         })
 
         if (!r.ok) {
@@ -677,10 +695,17 @@ async function generate() {
                 if (ev.event === 'stage') {
                     updateStage(ev.data.id, ev.data.status, ev.data.duration)
                     chatScroll.scrollTop = chatScroll.scrollHeight
+                } else if (ev.event === 'text') {
+                    addMessage('ai', ev.data.code)
+                    chatScroll.scrollTop = chatScroll.scrollHeight
                 } else if (ev.event === 'complete') {
                     removeThinkingStages()
-                    addMessage('ai', `✅ Sent to Studio`)
-                    toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
+                    if (mode === 'plan') {
+                        toast('Planning complete (' + ev.data.totalTime + 's)', 'success')
+                    } else {
+                        addMessage('ai', `✅ Sent to Studio`)
+                        toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
+                    }
                 } else if (ev.event === 'error') {
                     removeThinkingStages()
                     addMessage('ai', `❌ ${ev.data.message}`)
