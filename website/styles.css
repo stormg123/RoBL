@@ -35,7 +35,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
                var(--bg);padding:24px}
 .auth-panel{width:100%;max-width:400px;animation:scaleIn 0.5s var(--bounce)}
 .auth-brand{text-align:center;margin-bottom:32px}
-.auth-brand h1{font-size:40px;font-weight:900;letter-spacing:-0.04em;
+.auth-brand h1{font-size:40px;font-weight:900;letter-spacing:-0.04em;color:var(--accent);
     background:linear-gradient(135deg,#fff 30%,var(--accent));
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .auth-brand p{color:var(--text-secondary);font-size:14px;margin-top:6px}
@@ -96,7 +96,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 @keyframes slideIn{from{transform:translateX(-260px)}to{transform:translateX(0)}}
 .sidebar.closed{display:none}
 .sidebar-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)}
-.sidebar-logo{font-size:17px;font-weight:800;letter-spacing:-0.03em;
+.sidebar-logo{font-size:17px;font-weight:800;letter-spacing:-0.03em;color:var(--accent);
     background:linear-gradient(135deg,#fff 30%,var(--accent));
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .sidebar-new-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;
@@ -306,7 +306,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .nim-link:hover{text-decoration:underline}
 
 /* ======== PIXEL FONT ======== */
-.pixel-next{font-family:'Press Start 2P',monospace;font-size:10px;display:inline-block;
+.pixel-next{font-family:'Press Start 2P',monospace;font-size:10px;display:inline-block;color:var(--accent);
     background:linear-gradient(135deg,var(--accent),#00e5bf);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
     letter-spacing:-0.02em;transform:translateY(-2px)}
@@ -315,19 +315,23 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .msg-image{max-width:100%;max-height:280px;border-radius:10px;margin-bottom:8px;object-fit:contain;display:block}
 
 /* ======== LIGHT THEME ======== */
-body.light-theme{--bg:#f2f2f5;--bg-elevated:#ffffff;--bg-card:#eaeaef;--bg-hover:#e0e0e5;--bg-input:#e6e6eb;
-    --text:#161618;--text-secondary:#5c5c66;--text-muted:#909098;--border:#d0d0d5;--border-light:#e0e0e5;
+body.light-theme{--bg:#e8e8ed;--bg-elevated:#f5f5f7;--bg-card:#e0e0e5;--bg-hover:#d8d8dd;--bg-input:#dddde2;
+    --text:#111113;--text-secondary:#44444e;--text-muted:#6c6c76;--border:#c8c8cd;--border-light:#d8d8dd;
     --shadow:0 1px 3px rgba(0,0,0,0.06);--shadow-lg:0 8px 32px rgba(0,0,0,0.08)}
-body.light-theme .auth-brand h1{background:linear-gradient(135deg,#1a1a1c 30%,var(--accent));
+body.light-theme .auth-brand h1{color:var(--accent);
+    background:linear-gradient(135deg,#222 30%,var(--accent));
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-body.light-theme .sidebar-logo{background:linear-gradient(135deg,#1a1a1c 30%,var(--accent));
+body.light-theme .sidebar-logo{color:var(--accent);
+    background:linear-gradient(135deg,#222 30%,var(--accent));
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-body.light-theme .toast{box-shadow:0 8px 32px rgba(0,0,0,0.1)}
-body.light-theme .msg.ai .msg-bub{background:#f8f8fa;border-color:#e0e0e5}
-body.light-theme .sync-status,.light-theme .modal,.light-theme .auth-card{box-shadow:0 4px 24px rgba(0,0,0,0.06)}
-body.light-theme .input-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,170,0.12)}
-body.light-theme .nim-input-row input:focus{box-shadow:0 0 0 3px rgba(0,212,170,0.12)}
-body.light-theme .setting-input:focus{box-shadow:0 0 0 2px rgba(0,212,170,0.12)}
+body.light-theme .toast{box-shadow:0 8px 32px rgba(0,0,0,0.12)}
+body.light-theme .msg.ai .msg-bub{background:#ececf0;border-color:#d0d0d5}
+body.light-theme .sync-status,body.light-theme .modal,body.light-theme .auth-card{box-shadow:0 4px 24px rgba(0,0,0,0.08)}
+body.light-theme .input-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,170,0.15)}
+body.light-theme .nim-input-row input:focus{box-shadow:0 0 0 3px rgba(0,212,170,0.15)}
+body.light-theme .setting-input:focus{box-shadow:0 0 0 2px rgba(0,212,170,0.15)}
+body.light-theme .nim-modal p{color:var(--text-secondary)}
+body.light-theme .setting-info span{color:var(--text-secondary)}
 
 /* ======== DASHBOARD BACKGROUND ORBS ======== */
 .dashboard{position:relative;background:var(--bg)}
