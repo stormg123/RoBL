@@ -17,7 +17,7 @@ local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 
 -- ============ CONFIG ============
-local API_URL = "http://localhost:3000"
+local API_URL = "https://robl-t4dq.onrender.com"
 local API_BASE = API_URL .. "/api"
 local POLL_INTERVAL = 5
 

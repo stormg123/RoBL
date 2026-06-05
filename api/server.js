@@ -19,13 +19,17 @@ const path = require('path');
 // ============================================================
 
 const PORT = process.env.PORT || 3000;
-const CLIENT_ID = 'YOUR_ROBLOX_OAUTH_CLIENT_ID';         // <-- replace with your Roblox OAuth app Client ID
-const CLIENT_SECRET = 'YOUR_ROBLOX_OAUTH_CLIENT_SECRET';   // <-- replace with your secret
-const REDIRECT_URI = 'http://localhost:3000/auth/roblox/callback';
-const ENTRY_LINK = 'http://localhost:3000';
+const CLIENT_ID = process.env.CLIENT_ID || 'YOUR_ROBLOX_OAUTH_CLIENT_ID';
+const CLIENT_SECRET = process.env.CLIENT_SECRET || 'YOUR_ROBLOX_OAUTH_CLIENT_SECRET';
+
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const REDIRECT_URI = BASE_URL + '/auth/roblox/callback';
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'https://robl-t4dq.onrender.com', 'https://robl-ai.netlify.app'],
+    credentials: true,
+}));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '../website')));
 
@@ -208,9 +212,9 @@ app.get('/api/health', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`\n🧊 RoBl API running on ${ENTRY_LINK}`);
-    console.log(`   Entry Link (OAuth):   ${ENTRY_LINK}`);
-    console.log(`   Privacy Policy URL:   ${ENTRY_LINK}/privacy.html`);
-    console.log(`   Terms of Service URL: ${ENTRY_LINK}/terms.html`);
+    console.log(`\n🧊 RoBl API running on ${BASE_URL}`);
+    console.log(`   Entry Link (OAuth):   ${BASE_URL}`);
+    console.log(`   Privacy Policy URL:   ${BASE_URL}/privacy.html`);
+    console.log(`   Terms of Service URL: ${BASE_URL}/terms.html`);
     console.log(`   OAuth Callback URI:   ${REDIRECT_URI}\n`);
 });
