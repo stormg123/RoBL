@@ -299,14 +299,25 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
             sendEvent('text', { text: cleanText, recommendations });
             sendEvent('complete', { success: true, plan: true, totalTime });
         } else {
+            // Stage 1: Analyze — real AI analysis
+            sendEvent('stage', { id: 'analyze', status: 'active' });
+            const analysisSysPrompt = 'You are a Roblox Studio build planner. Analyze what the user wants built and identify: the key objects to create, which Roblox services are needed, and the main steps the script will perform. Keep it under 3 sentences.';
+            const analysisMsg = { role: 'user', content: prompt };
+            const analysis = await callNVIDIA([{ role: 'system', content: analysisSysPrompt }, analysisMsg], apiKey, model);
+            sendEvent('stage', { id: 'analyze', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+            // Stage 2: Generate — main AI codegen using analysis context
+            sendEvent('stage', { id: 'generate', status: 'active' });
             const codeSysPrompt = 'You are an expert Roblox Lua developer integrated directly into Roblox Studio. Generate complete, production-ready Lua scripts that can be inserted and run immediately. The script must be fully self-contained and able to: manipulate the Studio workspace (move, resize, clone parts), create new instances from scratch (Parts, Scripts, GUI elements, etc.), fetch and insert models from the Roblox Toolbox, modify terrain and lighting, create and configure DataStore connections, and build complete game systems from a single prompt. Only output raw Lua code — no explanations, no markdown wrappers.';
             const codeMsg = image
-                ? { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }] }
-                : { role: 'user', content: prompt };
+                ? { role: 'user', content: [{ type: 'text', text: `${analysis}\n\nBuild this: ${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
+                : { role: 'user', content: `${analysis}\n\nBuild this: ${prompt}` };
             const generatedCode = await callNVIDIA([{ role: 'system', content: codeSysPrompt }, codeMsg], apiKey, model);
             const cleanCode = generatedCode.replace(/```lua\n?/g, '').replace(/```/g, '').trim();
+            sendEvent('stage', { id: 'generate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
-            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+            // Stage 3: Prepare for Studio
+            sendEvent('stage', { id: 'studio', status: 'active' });
             const codeId = generateCodeId();
             codes[codeId] = {
                 code: cleanCode,
@@ -315,7 +326,12 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
                 status: 'pending',
                 robloxId: session.robloxId,
             };
-            sendEvent('complete', { success: true, codeId, prompt, totalTime });
+            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+            sendEvent('stage', { id: 'studio', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+            // Build a summary from the analysis
+            const summary = analysis.length > 120 ? analysis.substring(0, 120) + '...' : analysis;
+            sendEvent('complete', { success: true, codeId, prompt, totalTime, summary });
         }
         res.end();
     } catch (err) {
