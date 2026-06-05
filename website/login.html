@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoBl — AI for Roblox Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="app">
+    <!-- Auth -->
+    <section id="auth" class="screen auth active">
+        <div class="auth-panel">
+            <div class="auth-brand">
+                <h1>RoBl</h1>
+                <p>AI-powered code generation for Roblox Studio</p>
+            </div>
+            <div class="auth-card">
+                <h2>Get started</h2>
+                <p class="auth-sub">Connect your Roblox account to begin</p>
+                <button id="loginBtn" class="btn btn-primary btn-block">
+                    <img src="https://www.roblox.com/favicon.ico" alt="" class="btn-icon">
+                    Log in with Roblox
+                </button>
+                <div class="auth-footer">
+                    <a href="privacy.html">Privacy</a>
+                    <span class="dot">·</span>
+                    <a href="terms.html">Terms</a>
+                </div>
+            </div>
+            <div class="auth-decoration">
+                <div class="orb orb-1"></div>
+                <div class="orb orb-2"></div>
+            </div>
+            <div class="auth-credits">Made by <span>StormPieWormPie</span></div>
+        </div>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dashboard" class="screen dashboard">
+        <nav class="navbar">
+            <div class="nav-left">
+                <span class="nav-brand">RoBl</span>
+                <div class="nav-tabs">
+                    <button class="nav-tab active" data-tab="generate">Generate</button>
+                    <button class="nav-tab" data-tab="history">History</button>
+                    <button class="nav-tab" data-tab="settings">Settings</button>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="connection-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Disconnected</span>
+                </div>
+                <div class="user-menu" id="userMenu">
+                    <img id="avatar" src="" alt="">
+                    <span id="displayName">User</span>
+                </div>
+                <button id="logoutBtn" class="btn btn-ghost btn-sm">Log out</button>
+                <div class="nav-credits">by StormPieWormPie</div>
+            </div>
+        </nav>
+
+        <main class="main">
+            <!-- Generate -->
+            <div class="tab-panel active" id="tab-generate">
+                <div class="prompt-card">
+                    <div class="prompt-header">
+                        <h2>What do you want to build?</h2>
+                        <p>Describe the Roblox script you need, and AI will generate it.</p>
+                    </div>
+                    <div class="prompt-input-wrap">
+                        <textarea id="prompt" rows="3" placeholder="e.g. Create a door that slides open when a player clicks it, using TweenService..."></textarea>
+                    </div>
+                    <div class="prompt-bar">
+                        <div class="prompt-controls">
+                            <select id="modelSelect" class="select">
+                                <option value="nvidia/llama-3.1-nemotron-70b-instruct">Llama 3.1 Nemotron 70B</option>
+                                <option value="nvidia/llama-3.1-nemotron-8b-instruct">Llama 3.1 Nemotron 8B</option>
+                                <option value="meta/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+                            </select>
+                        </div>
+                        <button id="generateBtn" class="btn btn-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Generate
+                        </button>
+                    </div>
+                </div>
+
+                <div class="api-card">
+                    <div class="api-label">API Key</div>
+                    <div class="api-input-row">
+                        <input id="apiKey" type="password" class="input" placeholder="nvapi-..." autocomplete="off">
+                        <button id="saveKeyBtn" class="btn btn-secondary">Save</button>
+                    </div>
+                    <p class="api-hint">Get a free key from <a href="https://build.nvidia.com/explore/discover" target="_blank">NVIDIA NIM</a></p>
+                </div>
+
+                <div id="output" class="output-card" style="display:none">
+                    <div class="output-top">
+                        <h3>Generated Code</h3>
+                        <div class="output-actions">
+                            <button id="copyBtn" class="btn btn-secondary btn-sm">Copy</button>
+                            <button id="sendBtn" class="btn btn-secondary btn-sm">Send to Studio</button>
+                            <button id="regenerateBtn" class="btn btn-secondary btn-sm">Regenerate</button>
+                        </div>
+                    </div>
+                    <div id="editor" class="editor"></div>
+                </div>
+            </div>
+
+            <!-- History -->
+            <div class="tab-panel" id="tab-history">
+                <div class="panel-header">
+                    <h2>History</h2>
+                </div>
+                <div id="historyList" class="history-grid">
+                    <div class="empty-state">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        <p>No code generated yet</p>
+                        <span>Write a prompt and generate your first script.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="tab-panel" id="tab-settings">
+                <div class="panel-header">
+                    <h2>Settings</h2>
+                </div>
+                <div class="settings-card">
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <strong>Default Model</strong>
+                            <span>AI model used for generation</span>
+                        </div>
+                        <select id="defaultModel" class="select">
+                            <option value="nvidia/llama-3.1-nemotron-70b-instruct">Llama 3.1 Nemotron 70B</option>
+                            <option value="nvidia/llama-3.1-nemotron-8b-instruct">Llama 3.1 Nemotron 8B</option>
+                            <option value="meta/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <strong>Editor Theme</strong>
+                            <span>Code editor appearance</span>
+                        </div>
+                        <select id="editorTheme" class="select">
+                            <option value="vs-dark">Dark</option>
+                            <option value="vs-light">Light</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <strong>Auto-send to Studio</strong>
+                            <span>Automatically push generated code to the plugin</span>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="autoSend">
+                            <span class="toggle-knob"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </section>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

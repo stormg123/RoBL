@@ -71,7 +71,7 @@ function getSession() {
     const s = p.get('session') || localStorage.getItem('robl_session')
     if (p.get('session')) {
         localStorage.setItem('robl_session', p.get('session'))
-        window.history.replaceState({}, '', '/')
+        window.history.replaceState({}, '', '/login.html')
     }
     return s
 }

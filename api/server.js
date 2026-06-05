@@ -98,7 +98,7 @@ app.get('/auth/roblox/callback', async (req, res) => {
         const sessionId = generateSessionId();
         sessions[sessionId] = { robloxId, createdAt: Date.now() };
 
-        res.redirect(`/?session=${sessionId}`);
+        res.redirect(`/login.html?session=${sessionId}`);
     } catch (err) {
         console.error('OAuth error:', err);
         res.status(500).send('Authentication failed.');
