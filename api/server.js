@@ -5,19 +5,6 @@ const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const path = require('path');
 
-// ============================================================
-//  ROBLOX OAUTH 2.0 APP REGISTRATION - REQUIRED FIELDS
-// ============================================================
-// When you register your app at https://create.roblox.com/dashboard/credentials/oauth
-// you need to fill in these fields:
-//
-//   Entry Link URL:     http://localhost:3000
-//   Privacy Policy URL: http://localhost:3000/privacy.html
-//   Terms of Service URL: http://localhost:3000/terms.html
-//   Callback/Redirect URI: http://localhost:3000/auth/roblox/callback
-//   Scopes:             profile (or openid profile)
-// ============================================================
-
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID || 'YOUR_ROBLOX_OAUTH_CLIENT_ID';
 const CLIENT_SECRET = process.env.CLIENT_SECRET || 'YOUR_ROBLOX_OAUTH_CLIENT_SECRET';
@@ -36,6 +23,7 @@ app.use(express.static(path.join(__dirname, '../website')));
 const users = {};
 const codes = {};
 const sessions = {};
+const pluginConnections = {};
 
 function generateSessionId() {
     return crypto.randomBytes(32).toString('hex');
@@ -45,7 +33,16 @@ function generateCodeId() {
     return crypto.randomBytes(16).toString('hex');
 }
 
-// ============ AUTH ROUTES ============
+const FALLBACK_MODELS = [
+    { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Nemotron 70B', provider: 'NVIDIA' },
+    { id: 'nvidia/llama-3.1-nemotron-8b-instruct', name: 'Nemotron 8B', provider: 'NVIDIA' },
+    { id: 'meta/llama-3.1-405b-instruct', name: 'Llama 3.1 405B', provider: 'Meta' },
+    { id: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', provider: 'Meta' },
+    { id: 'mistralai/mistral-large', name: 'Mistral Large', provider: 'Mistral' },
+    { id: 'google/gemma-2-27b-it', name: 'Gemma 2 27B', provider: 'Google' },
+];
+
+// ============ AUTH ============
 
 app.get('/auth/roblox', (req, res) => {
     const state = generateSessionId();
@@ -60,7 +57,7 @@ app.get('/auth/roblox', (req, res) => {
 });
 
 app.get('/auth/roblox/callback', async (req, res) => {
-    const { code, state } = req.query;
+    const { code } = req.query;
     if (!code) return res.status(400).send('Missing authorization code.');
 
     try {
@@ -77,7 +74,6 @@ app.get('/auth/roblox/callback', async (req, res) => {
         });
         const tokenData = await tokenRes.json();
         if (!tokenRes.ok || !tokenData.access_token) {
-            console.error('Token exchange failed:', tokenData);
             return res.status(400).send('Failed to get access token.');
         }
 
@@ -105,21 +101,59 @@ app.get('/auth/roblox/callback', async (req, res) => {
     }
 });
 
-// ============ API ROUTES ============
+// ============ API ============
 
 app.get('/api/me', (req, res) => {
     const sessionId = req.query.session || req.headers['x-session-id'];
     const session = sessions[sessionId];
     if (!session) return res.status(401).json({ error: 'Not authenticated' });
-
     const user = users[session.robloxId];
     if (!user) return res.status(401).json({ error: 'User not found' });
-
     res.json({
         robloxId: user.robloxId,
         displayName: user.displayName,
         profileUrl: user.profileUrl,
     });
+});
+
+// Fetch models: try NVIDIA API, fall back to static list
+app.get('/api/models', async (req, res) => {
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey) {
+        try {
+        const r = await fetch('https://integrate.api.nvidia.com/v1/models', {
+            headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        if (r.ok) {
+            const data = await r.json();
+            const models = (data.data || []).map(m => ({
+                id: m.id,
+                name: m.id.split('/').pop() || m.id,
+                provider: m.id.includes('/') ? m.id.split('/')[0] : 'NVIDIA',
+            }));
+            return res.json({ models });
+        }
+        } catch {}
+    }
+    res.json({ models: FALLBACK_MODELS });
+});
+
+// Plugin pings to mark as connected
+app.post('/api/plugin/ping', (req, res) => {
+    const { robloxId } = req.body;
+    if (!robloxId) return res.status(400).json({ error: 'robloxId required' });
+    pluginConnections[String(robloxId)] = { lastSeen: Date.now() };
+    res.json({ ok: true });
+});
+
+// Check if plugin is connected for a session
+app.get('/api/plugin/status', (req, res) => {
+    const sessionId = req.query.session;
+    const session = sessions[sessionId];
+    if (!session) return res.json({ connected: false });
+    const conn = pluginConnections[session.robloxId];
+    const connected = conn && (Date.now() - conn.lastSeen < 30000);
+    res.json({ connected: !!connected, robloxId: session.robloxId });
 });
 
 app.post('/api/generate', async (req, res) => {
@@ -144,7 +178,7 @@ app.post('/api/generate', async (req, res) => {
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the code, no explanations.'
+                        content: 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the raw code, no explanations or markdown.'
                     },
                     {
                         role: 'user',
@@ -169,6 +203,7 @@ app.post('/api/generate', async (req, res) => {
         const codeId = generateCodeId();
         codes[codeId] = {
             code: generatedCode,
+            prompt,
             timestamp: Date.now(),
             status: 'pending',
             robloxId: session.robloxId,
@@ -176,8 +211,8 @@ app.post('/api/generate', async (req, res) => {
 
         res.json({
             success: true,
-            code: generatedCode,
             codeId,
+            prompt,
         });
     } catch (err) {
         console.error('Generation error:', err);
@@ -203,21 +238,9 @@ app.get('/api/code/latest', (req, res) => {
     res.json({
         code: codeData.code,
         codeId,
+        prompt: codeData.prompt,
         timestamp: codeData.timestamp,
     });
-});
-
-const AVAILABLE_MODELS = [
-    { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B', provider: 'NVIDIA' },
-    { id: 'nvidia/llama-3.1-nemotron-8b-instruct', name: 'Llama 3.1 Nemotron 8B', provider: 'NVIDIA' },
-    { id: 'meta/llama-3.1-405b-instruct', name: 'Llama 3.1 405B', provider: 'Meta' },
-    { id: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', provider: 'Meta' },
-    { id: 'mistralai/mistral-large', name: 'Mistral Large', provider: 'Mistral' },
-    { id: 'google/gemma-2-27b-it', name: 'Gemma 2 27B', provider: 'Google' },
-];
-
-app.get('/api/models', (req, res) => {
-    res.json({ models: AVAILABLE_MODELS });
 });
 
 app.get('/api/health', (req, res) => {

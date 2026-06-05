@@ -1,62 +1,63 @@
 const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3000'
     : 'https://robl-t4dq.onrender.com'
-
 const API_BASE = API_URL + '/api'
 
-let session = null
-let user = null
-let editors = {}
-let messages = []
-let messageCounter = 0
+let session = null, user = null, chatId = null, chats = {}, msgCount = 0
+let pluginConnected = false, pluginPollInterval = null, syncPollInterval = null
 
 const $ = id => document.getElementById(id)
-const auth = $('auth'), dashboard = $('dashboard')
+const auth = $('auth'), sync = $('sync'), dashboard = $('dashboard')
 const loginBtn = $('loginBtn'), logoutBtn = $('logoutBtn')
-const prompt = $('prompt'), generateBtn = $('generateBtn')
+const prompt = $('prompt'), sendBtn = $('sendBtn')
 const modelSelect = $('modelSelect'), apiKey = $('apiKey'), saveKeyBtn = $('saveKeyBtn')
 const avatar = $('avatar'), displayName = $('displayName')
-const statusDot = $('statusDot'), statusText = $('statusText')
-const chatMessages = $('chatMessages'), toastContainer = $('toastContainer')
+const pluginDot = $('pluginDot'), pluginText = $('pluginText')
+const messages = $('messages'), chatScroll = $('chatScroll'), welcome = $('welcome')
+const toastContainer = $('toastContainer')
 const settingsBtn = $('settingsBtn'), settingsModal = $('settingsModal'), closeSettings = $('closeSettings')
-const tipsBanner = $('tipsBanner'), dismissTips = $('dismissTips')
+const sidebarChats = $('sidebarChats'), newChatBtn = $('newChatBtn'), topbarTitle = $('topbarTitle')
+const menuBtn = $('menuBtn'), toggleSidebarBtn = $('toggleSidebarBtn'), sidebar = $('sidebar')
+const syncStatus = $('syncStatus'), syncUserId = $('syncUserId'), pluginDotSync = $('syncStatus')?.querySelector('.sync-dot')
+const suggestionChips = $('suggestionChips')
 
 // ==================== TOAST ====================
-function toast(message, type = 'info', duration = 4000) {
-    const icons = { success: '✓', error: '✕', info: '●' }
+function toast(message, type = 'info', duration = 3000) {
     const el = document.createElement('div')
-    el.className = `toast toast-${type}`
-    el.innerHTML = `<span class="toast-icon">${icons[type] || '●'}</span><span class="toast-message">${message}</span><div class="toast-progress" style="animation-duration:${duration}ms"></div>`
-    el.addEventListener('click', () => { el.classList.add('removing'); setTimeout(() => el.remove(), 250) })
+    el.className = `toast ${type}`
+    el.textContent = message
+    el.addEventListener('click', () => { el.classList.add('removing'); setTimeout(() => el.remove(), 200) })
     toastContainer.appendChild(el)
-    setTimeout(() => { if (el.parentNode) { el.classList.add('removing'); setTimeout(() => el.remove(), 250) } }, duration)
+    setTimeout(() => { if (el.parentNode) { el.classList.add('removing'); setTimeout(() => el.remove(), 200) } }, duration)
 }
 
 // ==================== STORAGE ====================
 function loadKey() { const k = localStorage.getItem('robl_nvkey'); if (k) apiKey.value = k }
 function saveKey() {
     const v = apiKey.value.trim()
-    if (!v) return toast('Enter an API key first', 'error')
+    if (!v) return toast('Enter an API key', 'error')
     localStorage.setItem('robl_nvkey', v)
     toast('API key saved', 'success')
-    fetchModels()
+    loadModels(v)
 }
 saveKeyBtn.addEventListener('click', saveKey)
 apiKey.addEventListener('keydown', e => { if (e.key === 'Enter') saveKey() })
 
 // ==================== MODELS ====================
-async function fetchModels() {
+async function loadModels(key) {
+    const headers = {}
+    if (key) headers['x-api-key'] = key
     try {
-        const r = await fetch(`${API_BASE}/models`)
+        const r = await fetch(`${API_BASE}/models`, { headers })
         const data = await r.json()
-        if (data.models) {
+        if (data.models && data.models.length) {
             modelSelect.innerHTML = data.models.map(m =>
                 `<option value="${m.id}">${m.name}</option>`
             ).join('')
             const saved = localStorage.getItem('robl_model')
             if (saved) modelSelect.value = saved
         }
-    } catch { }
+    } catch {}
 }
 modelSelect.addEventListener('change', () => localStorage.setItem('robl_model', modelSelect.value))
 
@@ -75,14 +76,9 @@ async function checkAuth() {
     session = getSession()
     if (!session) return showAuth()
 
-    // Dev backdoor — skip OAuth
     if (session.startsWith('dev-')) {
         const stored = localStorage.getItem('robl_dev_user')
-        if (stored) {
-            user = JSON.parse(stored)
-            showDashboard()
-            return
-        }
+        if (stored) { user = JSON.parse(stored); showSync(); return }
         return showAuth()
     }
 
@@ -90,135 +86,258 @@ async function checkAuth() {
         const r = await fetch(`${API_BASE}/me?session=${session}`)
         if (!r.ok) { localStorage.removeItem('robl_session'); return showAuth() }
         user = await r.json()
-        showDashboard()
+        showSync()
     } catch { showAuth() }
 }
 
-function showAuth() { auth.classList.add('active'); dashboard.classList.remove('active') }
-
+function showAuth() { setScreen('auth') }
+function showSync() {
+    setScreen('sync')
+    displayName.textContent = user.displayName
+    syncUserId.textContent = user.robloxId
+    startSyncPolling()
+}
 function showDashboard() {
-    auth.classList.remove('active'); dashboard.classList.add('active')
+    setScreen('dashboard')
     if (user) {
         avatar.src = `https://www.roblox.com/headshot-thumbnail/image?userId=${user.robloxId}&width=150&height=150&format=png`
         avatar.onerror = () => { avatar.src = '' }
-        displayName.textContent = user.displayName
     }
     loadKey()
-    fetchModels()
-    pollStatus()
-    setInterval(pollStatus, 5000)
-    initTips()
+    loadSavedChats()
+    renderSidebar()
+    startPluginPolling()
+}
+
+function setScreen(name) {
+    [auth, sync, dashboard].forEach(s => s?.classList.remove('active'))
+    const target = $(name)
+    if (target) target.classList.add('active')
 }
 
 loginBtn.addEventListener('click', () => window.location.href = API_URL + '/auth/roblox')
 
-// Backdoor dev access (bypasses OAuth for testing)
 document.getElementById('backdoorLink')?.addEventListener('click', (e) => {
     e.preventDefault()
     const fakeSession = 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2)
     localStorage.setItem('robl_session', fakeSession)
     localStorage.setItem('robl_dev_user', JSON.stringify({
-        robloxId: '123456',
-        displayName: 'DevUser',
-        profileUrl: 'https://www.roblox.com/users/123456/profile',
+        robloxId: '123456', displayName: 'DevUser', profileUrl: 'https://www.roblox.com/users/123456/profile',
     }))
     window.location.reload()
 })
 
 logoutBtn.addEventListener('click', () => {
-    localStorage.removeItem('robl_session'); session = null; user = null; showAuth()
+    localStorage.removeItem('robl_session'); localStorage.removeItem('robl_dev_user')
+    session = null; user = null
+    stopPluginPolling(); stopSyncPolling()
+    showAuth()
 })
 
-// ==================== TIPS ====================
-function initTips() {
-    if (localStorage.getItem('robl_tips_dismissed')) {
-        tipsBanner.classList.add('hidden')
+// ==================== SYNC POLLING ====================
+function startSyncPolling() {
+    stopSyncPolling()
+    syncPollInterval = setInterval(checkPluginSync, 2000)
+    checkPluginSync()
+}
+
+function stopSyncPolling() {
+    if (syncPollInterval) { clearInterval(syncPollInterval); syncPollInterval = null }
+}
+
+async function checkPluginSync() {
+    if (!session || session.startsWith('dev-')) {
+        onPluginSynced()
+        return
+    }
+    try {
+        const r = await fetch(`${API_BASE}/plugin/status?session=${session}`)
+        const data = await r.json()
+        if (data.connected) {
+            onPluginSynced()
+        }
+    } catch {}
+}
+
+function onPluginSynced() {
+    stopSyncPolling()
+    const dot = syncStatus?.querySelector('.sync-dot')
+    if (dot) dot.classList.add('connected')
+    const text = syncStatus?.querySelector('span')
+    if (text) text.textContent = 'Plugin connected!'
+    setTimeout(() => showDashboard(), 600)
+}
+
+// ==================== PLUGIN POLLING ====================
+function startPluginPolling() {
+    stopPluginPolling()
+    pluginPollInterval = setInterval(checkPlugin, 5000)
+    checkPlugin()
+}
+
+function stopPluginPolling() {
+    if (pluginPollInterval) { clearInterval(pluginPollInterval); pluginPollInterval = null }
+}
+
+async function checkPlugin() {
+    if (!session) return
+    if (session.startsWith('dev-')) { pluginDot.className = 'plugin-dot online'; pluginText.textContent = 'Dev mode'; return }
+    try {
+        const r = await fetch(`${API_BASE}/plugin/status?session=${session}`)
+        const data = await r.json()
+        if (data.connected) {
+            pluginDot.className = 'plugin-dot online'
+            pluginText.textContent = 'Studio connected'
+            pluginConnected = true
+        } else {
+            pluginDot.className = 'plugin-dot'
+            pluginText.textContent = 'Plugin offline'
+            pluginConnected = false
+        }
+    } catch {
+        pluginDot.className = 'plugin-dot'
+        pluginText.textContent = 'Plugin offline'
+        pluginConnected = false
     }
 }
-dismissTips.addEventListener('click', () => {
-    tipsBanner.classList.add('hidden')
-    localStorage.setItem('robl_tips_dismissed', 'true')
-})
 
-// ==================== CHAT ====================
-function addMessage(role, content, code, codeId) {
-    const id = 'msg-' + (++messageCounter)
-    const avatarLetter = role === 'user'
+// ==================== SIDEBAR / CHATS ====================
+function loadSavedChats() {
+    try { chats = JSON.parse(localStorage.getItem('robl_chats') || '{}') } catch { chats = {} }
+}
+
+function saveChats() {
+    localStorage.setItem('robl_chats', JSON.stringify(chats))
+}
+
+function renderSidebar() {
+    const ids = Object.keys(chats).sort((a, b) => (chats[b].updated || 0) - (chats[a].updated || 0))
+    if (!ids.length) {
+        sidebarChats.innerHTML = '<div style="padding:16px;text-align:center;font-size:13px;color:var(--text-muted)">No chats yet</div>'
+        return
+    }
+    sidebarChats.innerHTML = ids.map(id => {
+        const c = chats[id]
+        const title = c.title || 'New chat'
+        const active = id === chatId ? ' active' : ''
+        return `<div class="chat-item${active}" data-id="${id}">
+            <span class="chat-item-title">${esc(title)}</span>
+            <button class="chat-item-del" data-del="${id}">×</button>
+        </div>`
+    }).join('')
+
+    sidebarChats.querySelectorAll('.chat-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.chat-item-del')) return
+            switchChat(el.dataset.id)
+        })
+    })
+    sidebarChats.querySelectorAll('.chat-item-del').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation()
+            deleteChat(btn.dataset.del)
+        })
+    })
+}
+
+function switchChat(id) {
+    if (id === chatId) return
+    chatId = id
+    renderSidebar()
+    renderMessages()
+    topbarTitle.textContent = chats[id]?.title || 'New chat'
+}
+
+function deleteChat(id) {
+    delete chats[id]
+    if (chatId === id) {
+        chatId = null
+        topbarTitle.textContent = 'New chat'
+        const remaining = Object.keys(chats)
+        if (remaining.length) chatId = remaining[0]
+    }
+    saveChats()
+    renderSidebar()
+    renderMessages()
+}
+
+function newChat() {
+    chatId = null
+    topbarTitle.textContent = 'New chat'
+    renderSidebar()
+    renderMessages()
+    prompt.focus()
+}
+
+newChatBtn.addEventListener('click', newChat)
+
+// ==================== MESSAGES ====================
+function renderMessages() {
+    messages.innerHTML = ''
+    welcome.style.display = chatId && chats[chatId]?.msgs?.length ? 'none' : ''
+
+    if (!chatId || !chats[chatId]) return
+
+    const msgs = chats[chatId].msgs || []
+    msgs.forEach(m => appendMessageDOM(m.role, m.text, m.time, false))
+    chatScroll.scrollTop = chatScroll.scrollHeight
+}
+
+function appendMessageDOM(role, text, time, animate = true) {
+    welcome.style.display = 'none'
+    const id = 'm-' + (++msgCount)
+    const av = role === 'user'
         ? (user?.displayName?.charAt(0) || 'U')
         : 'A'
-    const avatarBg = role === 'user'
-        ? 'background:linear-gradient(135deg,var(--accent),#00e5bf)'
-        : 'background:linear-gradient(135deg,#6366f1,#818cf8)'
 
-    let bubble = ''
-    if (role === 'user') {
-        bubble = `<div class="msg-bubble">${esc(content)}</div>`
-    } else {
-        let codeHtml = ''
-        if (code) {
-            codeHtml = `
-                <div class="msg-code-header">
-                    <span class="msg-code-lang"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Lua</span>
-                    <span style="font-size:11px;color:var(--text-muted)">${code.length} chars</span>
-                </div>
-                <div id="editor-${id}" class="msg-code-editor"></div>
-            `
+    let extra = ''
+    if (role === 'ai') {
+        if (text.startsWith('✅') || text.startsWith('✓')) {
+            extra = `<div class="msg-success">${text}</div>`
+            text = ''
+        } else if (text.startsWith('Error') || text.startsWith('❌')) {
+            extra = `<div class="msg-error">${text}</div>`
+            text = ''
         }
-        const codeActions = code
-            ? `<button class="msg-action-btn" onclick="copyCode('${id}')">Copy</button>
-               <button class="msg-action-btn primary" onclick="sendToStudio('${id}')">Send to Studio</button>
-               <button class="msg-action-btn" onclick="regenerate('${id}')">Regenerate</button>`
-            : ''
-        bubble = `<div class="msg-bubble">
-            <div style="margin-bottom:6px;font-weight:600;font-size:13px;color:var(--accent)">RoBl</div>
-            <div style="color:var(--text-secondary);font-size:14px;line-height:1.7;white-space:pre-wrap">${esc(content)}</div>
-            ${codeHtml}
-            <div class="msg-actions">${codeActions}</div>
-        </div>`
     }
 
-    const html = `<div class="msg ${role}" id="${id}">
-        <div class="msg-avatar" style="${avatarBg}">${avatarLetter}</div>
-        ${bubble}
+    const html = `<div class="msg ${role}" id="${id}"${animate ? '' : ''}>
+        <div class="msg-av">${av}</div>
+        <div class="msg-bub">
+            ${role === 'ai' ? '<div class="msg-label">RoBl</div>' : ''}
+            ${text ? `<div class="msg-text">${esc(text)}</div>` : ''}
+            ${extra}
+            <div class="msg-time">${time || new Date().toLocaleTimeString()}</div>
+        </div>
     </div>`
 
-    chatMessages.insertAdjacentHTML('beforeend', html)
-    messages.push({ id, role, content, code, codeId })
-
-    // Hide welcome
-    const welcome = chatMessages.querySelector('.chat-welcome')
-    if (welcome) welcome.style.display = 'none'
-
-    // Init editor if has code
-    if (role === 'ai' && code) {
-        initMsgEditor(id, code)
-    }
-
-    chatMessages.scrollTop = chatMessages.scrollHeight
-    return id
+    messages.insertAdjacentHTML('beforeend', html)
+    requestAnimationFrame(() => { chatScroll.scrollTop = chatScroll.scrollHeight })
 }
 
-function initMsgEditor(msgId, code) {
-    const el = document.getElementById('editor-' + msgId)
-    if (!el) return
-    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' } })
-    require(['vs/editor/editor.main'], () => {
-        const editor = monaco.editor.create(el, {
-            value: code,
-            language: 'lua',
-            theme: localStorage.getItem('robl_theme') || 'vs-dark',
-            fontSize: 12,
-            fontFamily: "'JetBrains Mono','Fira Code',monospace",
-            lineNumbers: 'on',
-            minimap: { enabled: false },
-            automaticLayout: true,
-            tabSize: 4,
-            wordWrap: 'on',
-            readOnly: true,
-            scrollBeyondLastLine: false,
-        })
-        editors[msgId] = editor
-    })
+function addMessage(role, text) {
+    const time = new Date().toLocaleTimeString()
+    appendMessageDOM(role, text, time)
+
+    if (!chatId) {
+        chatId = 'chat_' + Date.now()
+        chats[chatId] = { title: text.substring(0, 40), msgs: [], created: Date.now(), updated: Date.now() }
+        renderSidebar()
+        topbarTitle.textContent = chats[chatId].title
+    }
+    if (!chats[chatId]) {
+        chats[chatId] = { title: text.substring(0, 40), msgs: [], created: Date.now(), updated: Date.now() }
+    }
+
+    const c = chats[chatId]
+    c.msgs.push({ role, text, time })
+    c.updated = Date.now()
+    if (role === 'user' && c.msgs.length === 1) {
+        c.title = text.substring(0, 40)
+        topbarTitle.textContent = c.title
+        renderSidebar()
+    }
+    saveChats()
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
@@ -236,9 +355,8 @@ async function generate() {
     addMessage('user', p)
     prompt.value = ''
     prompt.style.height = 'auto'
-
-    generateBtn.disabled = true
-    generateBtn.classList.add('loading')
+    sendBtn.disabled = true
+    sendBtn.classList.add('loading')
 
     try {
         const r = await fetch(`${API_BASE}/generate?session=${session}`, {
@@ -249,137 +367,69 @@ async function generate() {
         const data = await r.json()
         if (!r.ok) throw new Error(data.error || 'Generation failed')
 
-        addMessage('ai', data.code, data.code, data.codeId)
-        toast('Code generated', 'success')
+        addMessage('ai', `✅ Sent to Studio — plugin will insert the code`)
+        toast('Code sent to Roblox Studio', 'success')
     } catch (err) {
-        addMessage('ai', 'Error: ' + err.message)
+        addMessage('ai', `❌ ${err.message}`)
         toast(err.message, 'error')
     } finally {
-        generateBtn.disabled = false
-        generateBtn.classList.remove('loading')
+        sendBtn.disabled = false
+        sendBtn.classList.remove('loading')
     }
 }
 
-generateBtn.addEventListener('click', generate)
-
+sendBtn.addEventListener('click', generate)
 prompt.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate() }
 })
-
 prompt.addEventListener('input', () => {
     prompt.style.height = 'auto'
-    prompt.style.height = Math.min(prompt.scrollHeight, 150) + 'px'
+    prompt.style.height = Math.min(prompt.scrollHeight, 120) + 'px'
 })
 
 // ==================== SUGGESTIONS ====================
-document.querySelectorAll('.suggestion-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-        prompt.value = chip.dataset.prompt
-        prompt.style.height = 'auto'
-        prompt.style.height = Math.min(prompt.scrollHeight, 150) + 'px'
-        prompt.focus()
-    })
+suggestionChips?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip')
+    if (!chip) return
+    prompt.value = chip.dataset.prompt
+    prompt.style.height = 'auto'
+    prompt.style.height = Math.min(prompt.scrollHeight, 120) + 'px'
+    prompt.focus()
+    generate()
 })
-
-// ==================== ACTIONS ====================
-function getMsgData(msgId) {
-    return messages.find(m => m.id === msgId)
-}
-
-window.copyCode = function(msgId) {
-    const msg = getMsgData(msgId)
-    if (!msg || !msg.code) return
-    navigator.clipboard.writeText(msg.code).then(
-        () => toast('Copied to clipboard', 'success'),
-        () => toast('Failed to copy', 'error'),
-    )
-}
-
-window.sendToStudio = function(msgId) {
-    const msg = getMsgData(msgId)
-    if (!msg || !msg.code) { toast('No code to send', 'error'); return }
-    toast('Code sent to Roblox Studio plugin', 'success')
-}
-
-window.regenerate = async function(msgId) {
-    const msg = getMsgData(msgId)
-    if (!msg) return
-    const k = apiKey.value.trim() || localStorage.getItem('robl_nvkey') || ''
-    const m = modelSelect.value
-
-    if (!k) { toast('Enter your NVIDIA NIM API key', 'error'); return }
-
-    const btn = document.querySelector(`#${msgId} .msg-action-btn:last-child`)
-    if (btn) { btn.textContent = 'Regenerating...'; btn.disabled = true }
-
-    try {
-        const r = await fetch(`${API_BASE}/generate?session=${session}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: msg.content, apiKey: k, model: m }),
-        })
-        const data = await r.json()
-        if (!r.ok) throw new Error(data.error || 'Failed')
-
-        // Update existing message
-        const editorEl = document.getElementById('editor-' + msgId)
-        if (editorEl && editors[msgId]) {
-            editors[msgId].setValue(data.code)
-            msg.code = data.code
-            msg.codeId = data.codeId
-        } else {
-            // Replace the message
-            const el = document.getElementById(msgId)
-            if (el) el.remove()
-            const idx = messages.indexOf(msg)
-            if (idx > -1) messages.splice(idx, 1)
-            addMessage('ai', data.code, data.code, data.codeId)
-        }
-        toast('Code regenerated', 'success')
-    } catch (err) {
-        toast(err.message, 'error')
-    } finally {
-        if (btn) { btn.textContent = 'Regenerate'; btn.disabled = false }
-    }
-}
 
 // ==================== SETTINGS ====================
 settingsBtn.addEventListener('click', () => { settingsModal.style.display = 'flex' })
 closeSettings.addEventListener('click', () => { settingsModal.style.display = 'none' })
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.style.display = 'none' })
 
-$('editorTheme')?.addEventListener('change', e => {
-    const theme = e.target.value
-    Object.values(editors).forEach(ed => monaco.editor.setTheme(theme))
-    localStorage.setItem('robl_theme', theme)
+$('themeSelect')?.addEventListener('change', e => {
+    localStorage.setItem('robl_theme', e.target.value)
 })
 
 const savedTheme = localStorage.getItem('robl_theme')
-if (savedTheme && $('editorTheme')) $('editorTheme').value = savedTheme
+if (savedTheme && $('themeSelect')) $('themeSelect').value = savedTheme
 
-const autoSend = $('autoSend')
-if (autoSend) {
-    const saved = localStorage.getItem('robl_autosend')
-    if (saved === 'true') autoSend.checked = true
-    autoSend.addEventListener('change', () => localStorage.setItem('robl_autosend', autoSend.checked))
-}
-
-// ==================== POLL ====================
-async function pollStatus() {
-    try {
-        const r = await fetch(`${API_BASE}/health`)
-        if (r.ok) {
-            statusDot.className = 'status-dot online'
-            statusText.textContent = 'Connected'
-        } else {
-            statusDot.className = 'status-dot'
-            statusText.textContent = 'Offline'
-        }
-    } catch {
-        statusDot.className = 'status-dot connecting'
-        statusText.textContent = 'Connecting...'
+// ==================== SIDEBAR TOGGLE ====================
+menuBtn.addEventListener('click', () => {
+    if (sidebar.classList.contains('closed')) {
+        sidebar.classList.remove('closed')
+    } else {
+        sidebar.classList.add('closed')
     }
-}
+})
+toggleSidebarBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('closed')
+})
 
+// Close sidebar on mobile when clicking outside
+document.addEventListener('click', (e) => {
+    if (window.innerWidth > 768) return
+    if (!sidebar.contains(e.target) && !menuBtn.contains(e.target) && !sidebar.classList.contains('closed')) {
+        sidebar.classList.add('closed')
+    }
+})
+
+// ==================== AUTO-RESIZE ====================
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', checkAuth)
