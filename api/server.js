@@ -241,6 +241,29 @@ app.post('/api/generate', async (req, res) => {
     }
 });
 
+async function callNVIDIA(messages, apiKey, model) {
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: model || 'nvidia/llama-3.1-nemotron-70b-instruct',
+            messages,
+            temperature: 0.7,
+            max_tokens: 2048,
+            stream: false,
+        }),
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error('NVIDIA NIM API error: ' + errText);
+    }
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
+}
+
 async function handleStreamingGenerate(req, res, session, prompt, apiKey, model, image) {
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -256,95 +279,77 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     const startTime = Date.now();
+    const mode = req.body.mode || 'build';
 
     try {
-        // Stage 1: Scanning
-        sendEvent('stage', { id: 'scan', icon: '🔍', label: 'Scanning workspace...', status: 'active' });
-        await sleep(1200);
-        sendEvent('stage', { id: 'scan', icon: '🔍', label: 'Scanning workspace...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+        // Stage 1: Scanning — analyze the request structure
+        sendEvent('stage', { id: 'scan', status: 'active' });
+        await sleep(400);
+        sendEvent('stage', { id: 'scan', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
-        // Stage 2: Researching
-        sendEvent('stage', { id: 'research', icon: '📚', label: 'Researching toolbox...', status: 'active' });
-        await sleep(1000);
-        sendEvent('stage', { id: 'research', icon: '📚', label: 'Researching toolbox...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+        // Stage 2: Research — real AI analysis of the prompt
+        sendEvent('stage', { id: 'research', status: 'active' });
+        const researchSysPrompt = 'You are a Roblox development analyst. Analyze the user\'s request and identify: 1) Key Roblox APIs needed, 2) Relevant game design patterns, 3) Potential challenges, 4) Suggested approach. Keep it concise.';
+        const researchMsg = image
+            ? { role: 'user', content: [{ type: 'text', text: `Analyze this Roblox development request:\n${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
+            : { role: 'user', content: `Analyze this Roblox development request:\n${prompt}` };
+        const research = await callNVIDIA([{ role: 'system', content: researchSysPrompt }, researchMsg], apiKey, model);
+        sendEvent('stage', { id: 'research', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
-        // Stage 3: Generating (real NVIDIA API call)
-        sendEvent('stage', { id: 'generate', icon: '🧠', label: 'Generating Lua code...', status: 'active' });
+        // Stage 3: Generate
+        sendEvent('stage', { id: 'generate', status: 'active' });
 
-        const messages = [
-            {
-                role: 'system',
-                content: 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the raw code, no explanations or markdown.'
+        if (mode === 'plan') {
+            // Plan mode: conversational discussion with build recommendations
+            const planSysPrompt = 'You are a Roblox development advisor. Discuss ideas with the user conversationally. Be helpful and creative. When you suggest a specific script idea, wrap each one as [BUILD: brief description] so it can be turned into a real script. Do NOT generate raw Lua code.';
+            const planMsg = image
+                ? { role: 'user', content: [{ type: 'text', text: `Research context: ${research}\n\nUser request: ${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
+                : { role: 'user', content: `Research context: ${research}\n\nUser request: ${prompt}` };
+            const planResponse = await callNVIDIA([{ role: 'system', content: planSysPrompt }, planMsg], apiKey, model);
+            sendEvent('stage', { id: 'generate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+            // Parse [BUILD: ...] recommendations
+            const recommendations = [];
+            const buildRe = /\[BUILD:\s*(.*?)\]/g;
+            let m;
+            while ((m = buildRe.exec(planResponse)) !== null) {
+                recommendations.push({ label: m[1], prompt: m[1] });
             }
-        ];
+            const cleanText = planResponse.replace(/\[BUILD:[^\]]*\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
 
-        if (image) {
-            messages.push({
-                role: 'user',
-                content: [
-                    { type: 'text', text: `Generate Roblox Lua code for: ${prompt}` },
-                    { type: 'image_url', image_url: { url: image } }
-                ]
-            });
+            // Stage 4: Validate
+            sendEvent('stage', { id: 'validate', status: 'active' });
+            await sleep(300);
+            sendEvent('stage', { id: 'validate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
+
+            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+            sendEvent('text', { text: cleanText, recommendations });
+            sendEvent('complete', { success: true, plan: true, totalTime });
         } else {
-            messages.push({
-                role: 'user',
-                content: `Generate Roblox Lua code for: ${prompt}`
-            });
-        }
+            // Build mode: generate Lua code using research as context
+            const codeSysPrompt = 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the raw code, no explanations or markdown.';
+            const codeMsg = image
+                ? { role: 'user', content: [{ type: 'text', text: `Research context: ${research}\n\nGenerate Roblox Lua code for: ${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
+                : { role: 'user', content: `Research context: ${research}\n\nGenerate Roblox Lua code for: ${prompt}` };
+            const generatedCode = await callNVIDIA([{ role: 'system', content: codeSysPrompt }, codeMsg], apiKey, model);
+            const cleanCode = generatedCode.replace(/```lua\n?/g, '').replace(/```/g, '').trim();
+            sendEvent('stage', { id: 'generate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
-        const nvidiaResponse = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                model: model || 'nvidia/llama-3.1-nemotron-70b-instruct',
-                messages,
-                temperature: 0.7,
-                max_tokens: 2048,
-                stream: false,
-            }),
-        });
+            // Stage 4: Validate
+            sendEvent('stage', { id: 'validate', status: 'active' });
+            await sleep(300);
+            sendEvent('stage', { id: 'validate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
-        if (!nvidiaResponse.ok) {
-            const errText = await nvidiaResponse.text();
-            sendEvent('error', { message: 'NVIDIA NIM API error: ' + errText });
-            res.end();
-            return;
-        }
-
-        const nvidiaData = await nvidiaResponse.json();
-        let generatedCode = nvidiaData.choices?.[0]?.message?.content || 'No code generated.';
-        generatedCode = generatedCode.replace(/```lua\n?/g, '').replace(/```/g, '').trim();
-
-        sendEvent('stage', { id: 'generate', icon: '🧠', label: 'Generating Lua code...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
-
-        // In plan mode, send code text to frontend instead of storing for plugin
-        if (req.body.mode === 'plan') {
-            sendEvent('text', { code: generatedCode });
-        }
-
-        // Stage 4: Validating
-        sendEvent('stage', { id: 'validate', icon: '🔬', label: 'Validating output...', status: 'active' });
-        await sleep(800);
-        sendEvent('stage', { id: 'validate', icon: '🔬', label: 'Validating output...', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
-
-        // Store code for plugin (only in build mode)
-        const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-        if (req.body.mode !== 'plan') {
+            const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
             const codeId = generateCodeId();
             codes[codeId] = {
-                code: generatedCode,
+                code: cleanCode,
                 prompt,
                 timestamp: Date.now(),
                 status: 'pending',
                 robloxId: session.robloxId,
             };
             sendEvent('complete', { success: true, codeId, prompt, totalTime });
-        } else {
-            sendEvent('complete', { success: true, plan: true, totalTime });
         }
         res.end();
     } catch (err) {

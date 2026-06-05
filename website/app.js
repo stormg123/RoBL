@@ -281,6 +281,28 @@ document.addEventListener('keydown', (e) => {
     }
 })
 
+function renderRecommendations(items) {
+    const container = document.createElement('div')
+    container.className = 'rec-chips'
+    container.innerHTML = items.map((r, i) =>
+        `<button class="rec-chip" data-index="${i}" data-prompt="${esc(r.prompt)}">${esc(r.label)}</button>`
+    ).join('')
+    container.addEventListener('click', (e) => {
+        const chip = e.target.closest('.rec-chip')
+        if (!chip) return
+        const promptText = chip.dataset.prompt
+        mode = 'build'
+        updateModeIndicator()
+        prompt.value = promptText
+        prompt.style.height = 'auto'
+        prompt.style.height = Math.min(prompt.scrollHeight, 120) + 'px'
+        toast('Building: ' + promptText, 'info', 2000)
+        setTimeout(() => generate(), 300)
+    })
+    messages.appendChild(container)
+    chatScroll.scrollTop = chatScroll.scrollHeight
+}
+
 async function checkPlugin() {
     if (!session) return
     if (session.startsWith('dev-')) {
@@ -697,8 +719,11 @@ async function generate() {
                     updateStage(ev.data.id, ev.data.status, ev.data.duration)
                     chatScroll.scrollTop = chatScroll.scrollHeight
                 } else if (ev.event === 'text') {
-                    addMessage('ai', ev.data.code)
+                    addMessage('ai', ev.data.text || ev.data.code)
                     chatScroll.scrollTop = chatScroll.scrollHeight
+                    if (ev.data.recommendations?.length) {
+                        renderRecommendations(ev.data.recommendations)
+                    }
                 } else if (ev.event === 'complete') {
                     removeThinkingStages()
                     if (mode === 'plan') {
