@@ -241,7 +241,7 @@ app.post('/api/generate', async (req, res) => {
     }
 });
 
-async function callNVIDIA(messages, apiKey, model) {
+async function callNVIDIA(messages, apiKey, model, maxTokens = 4096) {
     const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -252,7 +252,7 @@ async function callNVIDIA(messages, apiKey, model) {
             model: model || 'nvidia/llama-3.1-nemotron-70b-instruct',
             messages,
             temperature: 0.7,
-            max_tokens: 4096,
+            max_tokens: maxTokens,
             stream: false,
         }),
     });
@@ -299,6 +299,27 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
             sendEvent('text', { text: cleanText, recommendations });
             sendEvent('complete', { success: true, plan: true, totalTime });
         } else {
+            // Intent classification — is this a build request or casual chat?
+            const intentPrompt = 'Reply with exactly one word: "build" if the user is asking to create, make, generate, build, or script something in Roblox. Reply "chat" for greetings, questions, chit-chat, or anything not about building.';
+            const intentResponse = await callNVIDIA([
+                { role: 'system', content: 'You are a strict classifier. Output only one word: "build" or "chat".' },
+                { role: 'user', content: `${intentPrompt}\nUser: ${prompt}` }
+            ], apiKey, model, 5);
+            const isBuild = intentResponse.trim().toLowerCase().includes('build');
+
+            if (!isBuild) {
+                const chatSysPrompt = 'You are a helpful Roblox assistant. Respond conversationally and naturally. Do not generate Lua code.';
+                const chatMsg = image
+                    ? { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }] }
+                    : { role: 'user', content: prompt };
+                const chatResponse = await callNVIDIA([{ role: 'system', content: chatSysPrompt }, chatMsg], apiKey, model);
+                const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                sendEvent('text', { text: chatResponse, recommendations: [] });
+                sendEvent('complete', { success: true, plan: true, totalTime });
+                res.end();
+                return;
+            }
+
             // Stage 1: Analyze — real AI analysis
             sendEvent('stage', { id: 'analyze', status: 'active' });
             const analysisSysPrompt = 'You are a Roblox Studio build planner. Analyze what the user wants built and identify: the key objects to create, which Roblox services are needed, and the main steps the script will perform. Keep it under 3 sentences.';

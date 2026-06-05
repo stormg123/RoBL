@@ -281,35 +281,6 @@ document.addEventListener('keydown', (e) => {
     }
 })
 
-function renderBuildSummary(summary, originalPrompt) {
-    const container = document.createElement('div')
-    container.className = 'build-summary'
-    container.innerHTML = `
-        <div class="build-summary-text">${esc(summary)}</div>
-        <div class="build-summary-label">What would you like to change?</div>
-        <div class="build-summary-chips">
-            <button class="rec-chip change-chip" data-change="Refine the logic">Refine it</button>
-            <button class="rec-chip change-chip" data-change="Add more features">Add features</button>
-            <button class="rec-chip change-chip" data-change="Change the design">Change design</button>
-            <button class="rec-chip change-chip" data-change="Fix and improve">Fix issues</button>
-        </div>
-    `
-    container.addEventListener('click', (e) => {
-        const chip = e.target.closest('.change-chip')
-        if (!chip) return
-        const change = chip.dataset.change
-        mode = 'build'
-        updateModeIndicator()
-        prompt.value = `${change} for: ${originalPrompt}`
-        prompt.style.height = 'auto'
-        prompt.style.height = Math.min(prompt.scrollHeight, 120) + 'px'
-        toast('Refining build: ' + change, 'info', 2000)
-        setTimeout(() => generate(), 300)
-    })
-    messages.appendChild(container)
-    chatScroll.scrollTop = chatScroll.scrollHeight
-}
-
 function renderRecommendations(items) {
     const container = document.createElement('div')
     container.className = 'rec-chips'
@@ -710,13 +681,13 @@ async function generate() {
                     }
                 } else if (ev.event === 'complete') {
                     hideLoading()
-                    if (mode === 'plan') {
+                    if (ev.data.plan) {
                         toast('Planning complete (' + ev.data.totalTime + 's)', 'success')
                     } else {
                         addMessage('ai', `✅ Sent to Studio`)
                         toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
                         if (ev.data.summary) {
-                            renderBuildSummary(ev.data.summary, ev.data.prompt)
+                            addMessage('ai', `Built: ${ev.data.summary}`)
                         }
                     }
                 } else if (ev.event === 'error') {
