@@ -70,6 +70,8 @@ a:hover{color:var(--accent-hover)}
 .auth-footer a{color:var(--text-muted);transition:color var(--transition)}
 .auth-footer a:hover{color:var(--accent)}
 .auth-footer .dot{color:var(--border)}
+.auth-credits{text-align:center;margin-top:20px;font-size:12px;color:var(--text-muted);letter-spacing:0.3px}
+.auth-credits span{color:var(--accent);font-weight:600}
 .auth-decoration{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
 .orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:0.4}
 .orb-1{width:500px;height:500px;background:var(--accent);top:-200px;right:-100px;animation:orbFloat 8s ease-in-out infinite}
@@ -117,6 +119,8 @@ a:hover{color:var(--accent-hover)}
     background:var(--bg-card);border:1px solid var(--border);border-radius:100px;cursor:pointer}
 .user-menu img{width:28px;height:28px;border-radius:50%;object-fit:cover}
 .user-menu span{font-size:13px;font-weight:500;color:var(--text)}
+.nav-credits{font-size:11px;color:var(--text-muted);letter-spacing:0.3px;opacity:0.6;display:none}
+@media(min-width:900px){.nav-credits{display:block}}
 
 /* ==================== MAIN ==================== */
 .main{padding:32px 40px;max-width:1100px;margin:0 auto}
