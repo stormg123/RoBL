@@ -146,6 +146,9 @@ function showSync() {
     displayName.textContent = user.displayName
     syncUserId.textContent = user.robloxId
     startSyncPolling()
+    if (session && session.startsWith('dev-')) {
+        startDevSync()
+    }
 }
 function showDashboard() {
     setScreen('dashboard')
@@ -202,8 +205,10 @@ function stopSyncPolling() {
 }
 
 async function checkPluginSync() {
-    if (!session || session.startsWith('dev-')) {
-        onPluginSynced()
+    if (!session) return
+    if (session.startsWith('dev-')) {
+        const text = syncStatus?.querySelector('span')
+        if (text) text.textContent = 'Simulating plugin sync...'
         return
     }
     try {
@@ -225,6 +230,15 @@ function onPluginSynced() {
     setTimeout(() => showDashboard(), 600)
 }
 
+// Dev mode simulated sync
+let devSyncTimer = null
+function startDevSync() {
+    if (devSyncTimer) clearTimeout(devSyncTimer)
+    devSyncTimer = setTimeout(() => {
+        onPluginSynced()
+    }, 3500)
+}
+
 // ==================== PLUGIN POLLING ====================
 function startPluginPolling() {
     stopPluginPolling()
@@ -237,13 +251,6 @@ function stopPluginPolling() {
 }
 
 function updateSyncLock() {
-    const isDev = session && session.startsWith('dev-')
-    if (isDev) {
-        syncLock?.classList.remove('show')
-        prompt.disabled = false
-        sendBtn.disabled = false
-        return
-    }
     if (pluginConnected) {
         syncLock?.classList.remove('show')
         prompt.disabled = false
@@ -260,7 +267,6 @@ async function checkPlugin() {
     if (session.startsWith('dev-')) {
         pluginDot.className = 'plugin-dot online'
         pluginText.textContent = 'Dev mode'
-        pluginConnected = true
         updateSyncLock()
         return
     }
@@ -629,7 +635,7 @@ async function generate() {
     if (!p) { toast('Enter a prompt', 'error'); return }
     if (!k) { toast('Enter your NVIDIA NIM API key', 'error'); return }
     if (!session) { toast('You must be logged in', 'error'); return }
-    if (!pluginConnected && !session?.startsWith('dev-')) { toast('Wait for Studio plugin to connect', 'error'); return }
+    if (!pluginConnected) { toast('Wait for Studio plugin to connect', 'error'); return }
 
     const imageData = pendingImage
     pendingImage = null
@@ -735,8 +741,8 @@ themeSelect?.addEventListener('change', e => {
 
 // Auto playtest / auto find bugs
 function loadSettings() {
-    if (autoPlaytest) autoPlaytest.checked = localStorage.getItem('robl_playtest') === 'true'
-    if (autoFindBugs) autoFindBugs.checked = localStorage.getItem('robl_findbugs') === 'true'
+    if (autoPlaytest) autoPlaytest.checked = localStorage.getItem('robl_playtest') !== 'false'
+    if (autoFindBugs) autoFindBugs.checked = localStorage.getItem('robl_findbugs') !== 'false'
 }
 
 autoPlaytest?.addEventListener('change', () => {
