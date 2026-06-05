@@ -11,7 +11,7 @@ const $ = id => document.getElementById(id)
 const auth = $('auth'), sync = $('sync'), dashboard = $('dashboard')
 const loginBtn = $('loginBtn'), logoutBtn = $('logoutBtn')
 const prompt = $('prompt'), sendBtn = $('sendBtn')
-const modelSelect = $('modelSelect'), apiKey = $('apiKey'), saveKeyBtn = $('saveKeyBtn')
+const modelSelect = $('modelSelect')
 const avatar = $('avatar'), displayName = $('displayName')
 const pluginDot = $('pluginDot'), pluginText = $('pluginText')
 const messages = $('messages'), chatScroll = $('chatScroll'), welcome = $('welcome')
@@ -25,6 +25,8 @@ const imageBtn = $('imageBtn'), imageInput = $('imageInput'), imageAttached = $(
 const nimModal = $('nimModal'), nimApiKey = $('nimApiKey'), nimSaveBtn = $('nimSaveBtn')
 const createProjectBtn = $('createProjectBtn'), projectScreen = $('projectScreen'), chatArea = $('chatArea')
 const themeSelect = $('themeSelect'), autoPlaytest = $('autoPlaytest'), autoFindBugs = $('autoFindBugs')
+const settingsApiKey = $('settingsApiKey'), settingsSaveKey = $('settingsSaveKey')
+const syncLock = $('syncLock')
 
 // ==================== TOAST ====================
 function toast(message, type = 'info', duration = 4000) {
@@ -36,38 +38,55 @@ function toast(message, type = 'info', duration = 4000) {
     setTimeout(() => { if (el.parentNode) { el.classList.add('removing'); setTimeout(() => el.remove(), 300) } }, duration)
 }
 
-// ==================== STORAGE ====================
-function loadKey() { const k = localStorage.getItem('robl_nvkey'); if (k) { apiKey.value = k; nimApiKey.value = k } }
-function saveKey() {
-    const v = apiKey.value.trim()
-    if (!v) return toast('Enter an API key', 'error')
-    localStorage.setItem('robl_nvkey', v)
-    toast('API key saved', 'success')
-    loadModels(v)
+// ==================== API KEY ====================
+function getApiKey() {
+    return localStorage.getItem('robl_nvkey') || ''
 }
-saveKeyBtn.addEventListener('click', saveKey)
-apiKey.addEventListener('keydown', e => { if (e.key === 'Enter') saveKey() })
+
+function setApiKey(val) {
+    localStorage.setItem('robl_nvkey', val)
+    if (nimApiKey) nimApiKey.value = val
+    if (settingsApiKey) settingsApiKey.value = val
+}
+
+function syncApiKeyFields() {
+    const k = getApiKey()
+    if (nimApiKey) nimApiKey.value = k
+    if (settingsApiKey) settingsApiKey.value = k
+}
 
 // ==================== NIM FIRST-TIME MODAL ====================
 function checkNimModal() {
-    if (!localStorage.getItem('robl_nvkey')) {
+    if (!getApiKey()) {
         nimModal.style.display = 'flex'
         nimApiKey.focus()
     }
 }
 
-nimSaveBtn.addEventListener('click', () => {
+nimSaveBtn?.addEventListener('click', () => {
     const v = nimApiKey.value.trim()
     if (!v) return toast('Enter your NVIDIA NIM API key', 'error')
-    localStorage.setItem('robl_nvkey', v)
-    apiKey.value = v
+    setApiKey(v)
     nimModal.style.display = 'none'
     toast('API key saved', 'success')
     loadModels(v)
 })
 
-nimApiKey.addEventListener('keydown', e => {
-    if (e.key === 'Enter') nimSaveBtn.click()
+nimApiKey?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') nimSaveBtn?.click()
+})
+
+// Settings API key save
+settingsSaveKey?.addEventListener('click', () => {
+    const v = settingsApiKey.value.trim()
+    if (!v) return toast('Enter your NVIDIA NIM API key', 'error')
+    setApiKey(v)
+    toast('API key saved', 'success')
+    loadModels(v)
+})
+
+settingsApiKey?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') settingsSaveKey?.click()
 })
 
 // ==================== MODELS ====================
@@ -134,13 +153,14 @@ function showDashboard() {
         avatar.src = `https://www.roblox.com/headshot-thumbnail/image?userId=${user.robloxId}&width=150&height=150&format=png`
         avatar.onerror = () => { avatar.src = '' }
     }
-    loadKey()
+    syncApiKeyFields()
     loadSavedChats()
     renderSidebar()
     applyTheme()
     loadSettings()
     startPluginPolling()
     checkNimModal()
+    updateSyncLock()
 }
 
 function setScreen(name) {
@@ -197,6 +217,7 @@ async function checkPluginSync() {
 
 function onPluginSynced() {
     stopSyncPolling()
+    pluginConnected = true
     const dot = syncStatus?.querySelector('.sync-dot')
     if (dot) dot.classList.add('connected')
     const text = syncStatus?.querySelector('span')
@@ -215,26 +236,51 @@ function stopPluginPolling() {
     if (pluginPollInterval) { clearInterval(pluginPollInterval); pluginPollInterval = null }
 }
 
+function updateSyncLock() {
+    const isDev = session && session.startsWith('dev-')
+    if (isDev) {
+        syncLock?.classList.remove('show')
+        prompt.disabled = false
+        sendBtn.disabled = false
+        return
+    }
+    if (pluginConnected) {
+        syncLock?.classList.remove('show')
+        prompt.disabled = false
+        sendBtn.disabled = false
+    } else {
+        syncLock?.classList.add('show')
+        prompt.disabled = true
+        sendBtn.disabled = true
+    }
+}
+
 async function checkPlugin() {
     if (!session) return
-    if (session.startsWith('dev-')) { pluginDot.className = 'plugin-dot online'; pluginText.textContent = 'Dev mode'; return }
+    if (session.startsWith('dev-')) {
+        pluginDot.className = 'plugin-dot online'
+        pluginText.textContent = 'Dev mode'
+        pluginConnected = true
+        updateSyncLock()
+        return
+    }
     try {
         const r = await fetch(`${API_BASE}/plugin/status?session=${session}`)
         const data = await r.json()
+        pluginConnected = !!data.connected
         if (data.connected) {
             pluginDot.className = 'plugin-dot online'
             pluginText.textContent = 'Studio connected'
-            pluginConnected = true
         } else {
             pluginDot.className = 'plugin-dot'
             pluginText.textContent = 'Plugin offline'
-            pluginConnected = false
         }
     } catch {
+        pluginConnected = false
         pluginDot.className = 'plugin-dot'
         pluginText.textContent = 'Plugin offline'
-        pluginConnected = false
     }
+    updateSyncLock()
 }
 
 // ==================== SIDEBAR / CHATS ====================
@@ -249,31 +295,84 @@ function saveChats() {
 function renderSidebar() {
     const ids = Object.keys(chats).sort((a, b) => (chats[b].updated || 0) - (chats[a].updated || 0))
     if (!ids.length) {
-        sidebarChats.innerHTML = '<div style="padding:16px;text-align:center;font-size:13px;color:var(--text-muted)">No chats yet</div>'
+        sidebarChats.innerHTML = '<div class="sidebar-empty">No projects yet</div>'
         return
     }
     sidebarChats.innerHTML = ids.map(id => {
         const c = chats[id]
-        const title = c.title || 'New chat'
+        const title = c.title || 'New project'
         const active = id === chatId ? ' active' : ''
         return `<div class="chat-item${active}" data-id="${id}">
-            <span class="chat-item-title">${esc(title)}</span>
-            <button class="chat-item-del" data-del="${id}">×</button>
+            <span class="chat-item-title" data-title="${id}">${esc(title)}</span>
+            <div class="chat-item-actions">
+                <button class="chat-item-action rename" data-rename="${id}" title="Rename">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </button>
+                <button class="chat-item-action del" data-del="${id}" title="Delete">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+            </div>
         </div>`
     }).join('')
 
     sidebarChats.querySelectorAll('.chat-item').forEach(el => {
         el.addEventListener('click', (e) => {
-            if (e.target.closest('.chat-item-del')) return
+            if (e.target.closest('.chat-item-actions')) return
             switchChat(el.dataset.id)
         })
     })
-    sidebarChats.querySelectorAll('.chat-item-del').forEach(btn => {
+
+    // Delete handlers
+    sidebarChats.querySelectorAll('.chat-item-action.del').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation()
             deleteChat(btn.dataset.del)
         })
     })
+
+    // Rename handlers
+    sidebarChats.querySelectorAll('.chat-item-action.rename').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation()
+            startRename(btn.dataset.rename)
+        })
+    })
+}
+
+function startRename(id) {
+    const chat = chats[id]
+    if (!chat) return
+    const span = document.querySelector(`.chat-item-title[data-title="${id}"]`)
+    if (!span) return
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'chat-item-rename'
+    input.value = chat.title || ''
+    input.autofocus = true
+
+    const finish = (save) => {
+        if (save) {
+            const val = input.value.trim()
+            if (val) {
+                chat.title = val
+                chat.updated = Date.now()
+                saveChats()
+                renderSidebar()
+                if (chatId === id) topbarTitle.textContent = val
+            }
+        }
+        renderSidebar()
+    }
+
+    input.addEventListener('blur', () => finish(true))
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true) }
+        if (e.key === 'Escape') { e.preventDefault(); finish(false) }
+    })
+
+    span.replaceWith(input)
+    input.select()
 }
 
 function switchChat(id) {
@@ -281,12 +380,13 @@ function switchChat(id) {
     chatId = id
     renderSidebar()
     renderMessages()
-    topbarTitle.textContent = chats[id]?.title || 'New chat'
+    topbarTitle.textContent = chats[id]?.title || 'New project'
 }
 
 function deleteChat(id) {
+    const wasActive = chatId === id
     delete chats[id]
-    if (chatId === id) {
+    if (wasActive) {
         chatId = null
         topbarTitle.textContent = 'Projects'
         const remaining = Object.keys(chats)
@@ -304,7 +404,6 @@ function newChat() {
     renderSidebar()
     renderMessages()
     updateProjectScreen()
-    prompt.focus()
 }
 
 newChatBtn.addEventListener('click', newChat)
@@ -346,9 +445,6 @@ function renderMessages() {
 function appendMessageDOM(role, text, time, image, animate = true) {
     welcome.style.display = 'none'
     const id = 'm-' + (++msgCount)
-    const av = role === 'user'
-        ? (user?.displayName?.charAt(0) || 'U')
-        : 'A'
 
     let extra = ''
     let displayText = text
@@ -367,10 +463,15 @@ function appendMessageDOM(role, text, time, image, animate = true) {
         imageHtml = `<img src="${image}" class="msg-image" alt="attached image">`
     }
 
+    let avatarHtml = ''
+    if (role === 'user') {
+        const av = user?.displayName?.charAt(0) || 'U'
+        avatarHtml = `<div class="msg-av">${av}</div>`
+    }
+
     const html = `<div class="msg ${role}" id="${id}">
-        <div class="msg-av">${av}</div>
+        ${avatarHtml}
         <div class="msg-bub">
-            ${role === 'ai' ? '<div class="msg-label">RoBl</div>' : ''}
             ${imageHtml}
             ${displayText ? `<div class="msg-text">${esc(displayText)}</div>` : ''}
             ${extra}
@@ -433,12 +534,13 @@ removeImageBtn?.addEventListener('click', () => {
 // ==================== GENERATE ====================
 async function generate() {
     const p = prompt.value.trim()
-    const k = apiKey.value.trim() || localStorage.getItem('robl_nvkey') || ''
+    const k = getApiKey()
     const m = modelSelect.value
 
     if (!p) { toast('Enter a prompt', 'error'); return }
     if (!k) { toast('Enter your NVIDIA NIM API key', 'error'); return }
     if (!session) { toast('You must be logged in', 'error'); return }
+    if (!pluginConnected && !session?.startsWith('dev-')) { toast('Wait for Studio plugin to connect', 'error'); return }
 
     const imageData = pendingImage
     pendingImage = null
@@ -460,7 +562,7 @@ async function generate() {
         const data = await r.json()
         if (!r.ok) throw new Error(data.error || 'Generation failed')
 
-        addMessage('ai', `✅ Sent to Studio — plugin will insert the code`)
+        addMessage('ai', `✅ Sent to Studio`)
         toast('Code sent to Roblox Studio', 'success')
     } catch (err) {
         addMessage('ai', `❌ ${err.message}`)
@@ -468,6 +570,7 @@ async function generate() {
     } finally {
         sendBtn.disabled = false
         sendBtn.classList.remove('loading')
+        updateSyncLock()
     }
 }
 
@@ -492,7 +595,10 @@ suggestionChips?.addEventListener('click', (e) => {
 })
 
 // ==================== SETTINGS ====================
-settingsBtn.addEventListener('click', () => { settingsModal.style.display = 'flex' })
+settingsBtn.addEventListener('click', () => {
+    syncApiKeyFields()
+    settingsModal.style.display = 'flex'
+})
 closeSettings.addEventListener('click', () => { settingsModal.style.display = 'none' })
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.style.display = 'none' })
 
@@ -530,7 +636,6 @@ toggleSidebarBtn.addEventListener('click', () => {
     sidebar.classList.toggle('closed')
 })
 
-// Close sidebar on mobile when clicking outside
 document.addEventListener('click', (e) => {
     if (window.innerWidth > 768) return
     if (!sidebar.contains(e.target) && !menuBtn.contains(e.target) && !sidebar.classList.contains('closed')) {
