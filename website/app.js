@@ -5,6 +5,7 @@ const API_BASE = API_URL + '/api'
 
 let session = null, user = null, chatId = null, chats = {}, msgCount = 0
 let pluginConnected = false, pluginPollInterval = null, syncPollInterval = null
+let pendingImage = null
 
 const $ = id => document.getElementById(id)
 const auth = $('auth'), sync = $('sync'), dashboard = $('dashboard')
@@ -18,21 +19,25 @@ const toastContainer = $('toastContainer')
 const settingsBtn = $('settingsBtn'), settingsModal = $('settingsModal'), closeSettings = $('closeSettings')
 const sidebarChats = $('sidebarChats'), newChatBtn = $('newChatBtn'), topbarTitle = $('topbarTitle')
 const menuBtn = $('menuBtn'), toggleSidebarBtn = $('toggleSidebarBtn'), sidebar = $('sidebar')
-const syncStatus = $('syncStatus'), syncUserId = $('syncUserId'), pluginDotSync = $('syncStatus')?.querySelector('.sync-dot')
+const syncStatus = $('syncStatus')
 const suggestionChips = $('suggestionChips')
+const imageBtn = $('imageBtn'), imageInput = $('imageInput'), imageAttached = $('imageAttached'), removeImageBtn = $('removeImageBtn')
+const nimModal = $('nimModal'), nimApiKey = $('nimApiKey'), nimSaveBtn = $('nimSaveBtn')
+const createProjectBtn = $('createProjectBtn'), projectScreen = $('projectScreen'), chatArea = $('chatArea')
+const themeSelect = $('themeSelect'), autoPlaytest = $('autoPlaytest'), autoFindBugs = $('autoFindBugs')
 
 // ==================== TOAST ====================
-function toast(message, type = 'info', duration = 3000) {
+function toast(message, type = 'info', duration = 4000) {
     const el = document.createElement('div')
     el.className = `toast ${type}`
     el.textContent = message
-    el.addEventListener('click', () => { el.classList.add('removing'); setTimeout(() => el.remove(), 200) })
+    el.addEventListener('click', () => { el.classList.add('removing'); setTimeout(() => el.remove(), 300) })
     toastContainer.appendChild(el)
-    setTimeout(() => { if (el.parentNode) { el.classList.add('removing'); setTimeout(() => el.remove(), 200) } }, duration)
+    setTimeout(() => { if (el.parentNode) { el.classList.add('removing'); setTimeout(() => el.remove(), 300) } }, duration)
 }
 
 // ==================== STORAGE ====================
-function loadKey() { const k = localStorage.getItem('robl_nvkey'); if (k) apiKey.value = k }
+function loadKey() { const k = localStorage.getItem('robl_nvkey'); if (k) { apiKey.value = k; nimApiKey.value = k } }
 function saveKey() {
     const v = apiKey.value.trim()
     if (!v) return toast('Enter an API key', 'error')
@@ -42,6 +47,28 @@ function saveKey() {
 }
 saveKeyBtn.addEventListener('click', saveKey)
 apiKey.addEventListener('keydown', e => { if (e.key === 'Enter') saveKey() })
+
+// ==================== NIM FIRST-TIME MODAL ====================
+function checkNimModal() {
+    if (!localStorage.getItem('robl_nvkey')) {
+        nimModal.style.display = 'flex'
+        nimApiKey.focus()
+    }
+}
+
+nimSaveBtn.addEventListener('click', () => {
+    const v = nimApiKey.value.trim()
+    if (!v) return toast('Enter your NVIDIA NIM API key', 'error')
+    localStorage.setItem('robl_nvkey', v)
+    apiKey.value = v
+    nimModal.style.display = 'none'
+    toast('API key saved', 'success')
+    loadModels(v)
+})
+
+nimApiKey.addEventListener('keydown', e => {
+    if (e.key === 'Enter') nimSaveBtn.click()
+})
 
 // ==================== MODELS ====================
 async function loadModels(key) {
@@ -78,7 +105,11 @@ async function checkAuth() {
 
     if (session.startsWith('dev-')) {
         const stored = localStorage.getItem('robl_dev_user')
-        if (stored) { user = JSON.parse(stored); showSync(); return }
+        const clicked = sessionStorage.getItem('robl_dev_click')
+        if (stored && clicked) { user = JSON.parse(stored); showSync(); return }
+        localStorage.removeItem('robl_session')
+        localStorage.removeItem('robl_dev_user')
+        sessionStorage.removeItem('robl_dev_click')
         return showAuth()
     }
 
@@ -106,7 +137,10 @@ function showDashboard() {
     loadKey()
     loadSavedChats()
     renderSidebar()
+    applyTheme()
+    loadSettings()
     startPluginPolling()
+    checkNimModal()
 }
 
 function setScreen(name) {
@@ -119,6 +153,7 @@ loginBtn.addEventListener('click', () => window.location.href = API_URL + '/auth
 
 document.getElementById('backdoorLink')?.addEventListener('click', (e) => {
     e.preventDefault()
+    sessionStorage.setItem('robl_dev_click', '1')
     const fakeSession = 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2)
     localStorage.setItem('robl_session', fakeSession)
     localStorage.setItem('robl_dev_user', JSON.stringify({
@@ -129,6 +164,7 @@ document.getElementById('backdoorLink')?.addEventListener('click', (e) => {
 
 logoutBtn.addEventListener('click', () => {
     localStorage.removeItem('robl_session'); localStorage.removeItem('robl_dev_user')
+    sessionStorage.removeItem('robl_dev_click')
     session = null; user = null
     stopPluginPolling(); stopSyncPolling()
     showAuth()
@@ -252,38 +288,62 @@ function deleteChat(id) {
     delete chats[id]
     if (chatId === id) {
         chatId = null
-        topbarTitle.textContent = 'New chat'
+        topbarTitle.textContent = 'Projects'
         const remaining = Object.keys(chats)
         if (remaining.length) chatId = remaining[0]
     }
     saveChats()
     renderSidebar()
     renderMessages()
+    updateProjectScreen()
 }
 
 function newChat() {
     chatId = null
-    topbarTitle.textContent = 'New chat'
+    topbarTitle.textContent = 'Projects'
     renderSidebar()
     renderMessages()
+    updateProjectScreen()
     prompt.focus()
 }
 
 newChatBtn.addEventListener('click', newChat)
 
+// ==================== CREATE PROJECT FLOW ====================
+function updateProjectScreen() {
+    if (chatId && chats[chatId]) {
+        projectScreen.style.display = 'none'
+        chatArea.style.display = 'flex'
+    } else {
+        projectScreen.style.display = 'flex'
+        chatArea.style.display = 'none'
+    }
+}
+
+createProjectBtn?.addEventListener('click', () => {
+    chatId = 'chat_' + Date.now()
+    chats[chatId] = { title: 'New project', msgs: [], created: Date.now(), updated: Date.now() }
+    saveChats()
+    renderSidebar()
+    topbarTitle.textContent = 'New project'
+    updateProjectScreen()
+    prompt.focus()
+})
+
 // ==================== MESSAGES ====================
 function renderMessages() {
     messages.innerHTML = ''
     welcome.style.display = chatId && chats[chatId]?.msgs?.length ? 'none' : ''
+    updateProjectScreen()
 
     if (!chatId || !chats[chatId]) return
 
     const msgs = chats[chatId].msgs || []
-    msgs.forEach(m => appendMessageDOM(m.role, m.text, m.time, false))
+    msgs.forEach(m => appendMessageDOM(m.role, m.text, m.time, m.image, false))
     chatScroll.scrollTop = chatScroll.scrollHeight
 }
 
-function appendMessageDOM(role, text, time, animate = true) {
+function appendMessageDOM(role, text, time, image, animate = true) {
     welcome.style.display = 'none'
     const id = 'm-' + (++msgCount)
     const av = role === 'user'
@@ -291,21 +351,28 @@ function appendMessageDOM(role, text, time, animate = true) {
         : 'A'
 
     let extra = ''
+    let displayText = text
     if (role === 'ai') {
         if (text.startsWith('✅') || text.startsWith('✓')) {
             extra = `<div class="msg-success">${text}</div>`
-            text = ''
+            displayText = ''
         } else if (text.startsWith('Error') || text.startsWith('❌')) {
             extra = `<div class="msg-error">${text}</div>`
-            text = ''
+            displayText = ''
         }
     }
 
-    const html = `<div class="msg ${role}" id="${id}"${animate ? '' : ''}>
+    let imageHtml = ''
+    if (image) {
+        imageHtml = `<img src="${image}" class="msg-image" alt="attached image">`
+    }
+
+    const html = `<div class="msg ${role}" id="${id}">
         <div class="msg-av">${av}</div>
         <div class="msg-bub">
             ${role === 'ai' ? '<div class="msg-label">RoBl</div>' : ''}
-            ${text ? `<div class="msg-text">${esc(text)}</div>` : ''}
+            ${imageHtml}
+            ${displayText ? `<div class="msg-text">${esc(displayText)}</div>` : ''}
             ${extra}
             <div class="msg-time">${time || new Date().toLocaleTimeString()}</div>
         </div>
@@ -315,22 +382,23 @@ function appendMessageDOM(role, text, time, animate = true) {
     requestAnimationFrame(() => { chatScroll.scrollTop = chatScroll.scrollHeight })
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, image) {
     const time = new Date().toLocaleTimeString()
-    appendMessageDOM(role, text, time)
+    appendMessageDOM(role, text, time, image)
 
     if (!chatId) {
         chatId = 'chat_' + Date.now()
         chats[chatId] = { title: text.substring(0, 40), msgs: [], created: Date.now(), updated: Date.now() }
         renderSidebar()
         topbarTitle.textContent = chats[chatId].title
+        updateProjectScreen()
     }
     if (!chats[chatId]) {
         chats[chatId] = { title: text.substring(0, 40), msgs: [], created: Date.now(), updated: Date.now() }
     }
 
     const c = chats[chatId]
-    c.msgs.push({ role, text, time })
+    c.msgs.push({ role, text, time, image })
     c.updated = Date.now()
     if (role === 'user' && c.msgs.length === 1) {
         c.title = text.substring(0, 40)
@@ -342,6 +410,26 @@ function addMessage(role, text) {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
 
+// ==================== IMAGE UPLOAD ====================
+imageBtn?.addEventListener('click', () => imageInput?.click())
+
+imageInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+        pendingImage = ev.target.result
+        imageAttached.style.display = 'inline-flex'
+    }
+    reader.readAsDataURL(file)
+})
+
+removeImageBtn?.addEventListener('click', () => {
+    pendingImage = null
+    imageAttached.style.display = 'none'
+    imageInput.value = ''
+})
+
 // ==================== GENERATE ====================
 async function generate() {
     const p = prompt.value.trim()
@@ -352,7 +440,12 @@ async function generate() {
     if (!k) { toast('Enter your NVIDIA NIM API key', 'error'); return }
     if (!session) { toast('You must be logged in', 'error'); return }
 
-    addMessage('user', p)
+    const imageData = pendingImage
+    pendingImage = null
+    imageAttached.style.display = 'none'
+    if (imageInput) imageInput.value = ''
+
+    addMessage('user', p, imageData)
     prompt.value = ''
     prompt.style.height = 'auto'
     sendBtn.disabled = true
@@ -362,7 +455,7 @@ async function generate() {
         const r = await fetch(`${API_BASE}/generate?session=${session}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: p, apiKey: k, model: m }),
+            body: JSON.stringify({ prompt: p, apiKey: k, model: m, image: imageData }),
         })
         const data = await r.json()
         if (!r.ok) throw new Error(data.error || 'Generation failed')
@@ -403,20 +496,35 @@ settingsBtn.addEventListener('click', () => { settingsModal.style.display = 'fle
 closeSettings.addEventListener('click', () => { settingsModal.style.display = 'none' })
 settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.style.display = 'none' })
 
-$('themeSelect')?.addEventListener('change', e => {
+// Theme
+function applyTheme() {
+    const t = localStorage.getItem('robl_theme') || 'dark'
+    document.body.classList.toggle('light-theme', t === 'light')
+    if (themeSelect) themeSelect.value = t
+}
+
+themeSelect?.addEventListener('change', e => {
     localStorage.setItem('robl_theme', e.target.value)
+    applyTheme()
 })
 
-const savedTheme = localStorage.getItem('robl_theme')
-if (savedTheme && $('themeSelect')) $('themeSelect').value = savedTheme
+// Auto playtest / auto find bugs
+function loadSettings() {
+    if (autoPlaytest) autoPlaytest.checked = localStorage.getItem('robl_playtest') === 'true'
+    if (autoFindBugs) autoFindBugs.checked = localStorage.getItem('robl_findbugs') === 'true'
+}
+
+autoPlaytest?.addEventListener('change', () => {
+    localStorage.setItem('robl_playtest', autoPlaytest.checked)
+})
+
+autoFindBugs?.addEventListener('change', () => {
+    localStorage.setItem('robl_findbugs', autoFindBugs.checked)
+})
 
 // ==================== SIDEBAR TOGGLE ====================
 menuBtn.addEventListener('click', () => {
-    if (sidebar.classList.contains('closed')) {
-        sidebar.classList.remove('closed')
-    } else {
-        sidebar.classList.add('closed')
-    }
+    sidebar.classList.toggle('closed')
 })
 toggleSidebarBtn.addEventListener('click', () => {
     sidebar.classList.toggle('closed')
@@ -430,6 +538,5 @@ document.addEventListener('click', (e) => {
     }
 })
 
-// ==================== AUTO-RESIZE ====================
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', checkAuth)

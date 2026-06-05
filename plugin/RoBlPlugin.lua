@@ -234,6 +234,18 @@ local function createUI()
         connectBtn.Active = false
         log("Connected as user " .. robloxId, "success")
 
+        -- Ping server to mark plugin as connected
+        local ok, result = pcall(function()
+            return HttpService:PostAsync(API_BASE .. "/plugin/ping", HttpService:JSONEncode({
+                robloxId = robloxId
+            }), Enum.HttpContentType.ApplicationJson)
+        end)
+        if ok then
+            log("Plugin sync ping sent", "success")
+        else
+            log("Failed to ping server for sync", "error")
+        end
+
         -- Start polling
         pollingThread = spawn(function()
             while isConnected do

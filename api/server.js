@@ -161,9 +161,31 @@ app.post('/api/generate', async (req, res) => {
     const session = sessions[sessionId];
     if (!session) return res.status(401).json({ error: 'Not authenticated' });
 
-    const { prompt, apiKey, model } = req.body;
+    const { prompt, apiKey, model, image } = req.body;
     if (!prompt || !apiKey) {
         return res.status(400).json({ error: 'Prompt and API key are required.' });
+    }
+
+    const messages = [
+        {
+            role: 'system',
+            content: 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the raw code, no explanations or markdown.'
+        }
+    ];
+
+    if (image) {
+        messages.push({
+            role: 'user',
+            content: [
+                { type: 'text', text: `Generate Roblox Lua code for: ${prompt}` },
+                { type: 'image_url', image_url: { url: image } }
+            ]
+        });
+    } else {
+        messages.push({
+            role: 'user',
+            content: `Generate Roblox Lua code for: ${prompt}`
+        });
     }
 
     try {
@@ -175,16 +197,7 @@ app.post('/api/generate', async (req, res) => {
             },
             body: JSON.stringify({
                 model: model || 'nvidia/llama-3.1-nemotron-70b-instruct',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the raw code, no explanations or markdown.'
-                    },
-                    {
-                        role: 'user',
-                        content: `Generate Roblox Lua code for: ${prompt}`
-                    }
-                ],
+                messages,
                 temperature: 0.7,
                 max_tokens: 2048,
                 stream: false,
