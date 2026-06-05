@@ -252,7 +252,7 @@ async function callNVIDIA(messages, apiKey, model) {
             model: model || 'nvidia/llama-3.1-nemotron-70b-instruct',
             messages,
             temperature: 0.7,
-            max_tokens: 2048,
+            max_tokens: 4096,
             stream: false,
         }),
     });
@@ -276,39 +276,17 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
     const startTime = Date.now();
     const mode = req.body.mode || 'build';
 
     try {
-        // Stage 1: Scanning — analyze the request structure
-        sendEvent('stage', { id: 'scan', status: 'active' });
-        await sleep(400);
-        sendEvent('stage', { id: 'scan', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
-
-        // Stage 2: Research — real AI analysis of the prompt
-        sendEvent('stage', { id: 'research', status: 'active' });
-        const researchSysPrompt = 'You are a Roblox development analyst. Analyze the user\'s request and identify: 1) Key Roblox APIs needed, 2) Relevant game design patterns, 3) Potential challenges, 4) Suggested approach. Keep it concise.';
-        const researchMsg = image
-            ? { role: 'user', content: [{ type: 'text', text: `Analyze this Roblox development request:\n${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
-            : { role: 'user', content: `Analyze this Roblox development request:\n${prompt}` };
-        const research = await callNVIDIA([{ role: 'system', content: researchSysPrompt }, researchMsg], apiKey, model);
-        sendEvent('stage', { id: 'research', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
-
-        // Stage 3: Generate
-        sendEvent('stage', { id: 'generate', status: 'active' });
-
         if (mode === 'plan') {
-            // Plan mode: conversational discussion with build recommendations
             const planSysPrompt = 'You are a Roblox development advisor. Discuss ideas with the user conversationally. Be helpful and creative. When you suggest a specific script idea, wrap each one as [BUILD: brief description] so it can be turned into a real script. Do NOT generate raw Lua code.';
             const planMsg = image
-                ? { role: 'user', content: [{ type: 'text', text: `Research context: ${research}\n\nUser request: ${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
-                : { role: 'user', content: `Research context: ${research}\n\nUser request: ${prompt}` };
+                ? { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }] }
+                : { role: 'user', content: prompt };
             const planResponse = await callNVIDIA([{ role: 'system', content: planSysPrompt }, planMsg], apiKey, model);
-            sendEvent('stage', { id: 'generate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
-            // Parse [BUILD: ...] recommendations
             const recommendations = [];
             const buildRe = /\[BUILD:\s*(.*?)\]/g;
             let m;
@@ -317,28 +295,16 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
             }
             const cleanText = planResponse.replace(/\[BUILD:[^\]]*\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
 
-            // Stage 4: Validate
-            sendEvent('stage', { id: 'validate', status: 'active' });
-            await sleep(300);
-            sendEvent('stage', { id: 'validate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
-
             const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
             sendEvent('text', { text: cleanText, recommendations });
             sendEvent('complete', { success: true, plan: true, totalTime });
         } else {
-            // Build mode: generate Lua code using research as context
-            const codeSysPrompt = 'You are an expert Roblox Lua developer. Generate high-quality, well-commented Lua code for Roblox Studio. Only output the raw code, no explanations or markdown.';
+            const codeSysPrompt = 'You are an expert Roblox Lua developer integrated directly into Roblox Studio. Generate complete, production-ready Lua scripts that can be inserted and run immediately. The script must be fully self-contained and able to: manipulate the Studio workspace (move, resize, clone parts), create new instances from scratch (Parts, Scripts, GUI elements, etc.), fetch and insert models from the Roblox Toolbox, modify terrain and lighting, create and configure DataStore connections, and build complete game systems from a single prompt. Only output raw Lua code — no explanations, no markdown wrappers.';
             const codeMsg = image
-                ? { role: 'user', content: [{ type: 'text', text: `Research context: ${research}\n\nGenerate Roblox Lua code for: ${prompt}` }, { type: 'image_url', image_url: { url: image } }] }
-                : { role: 'user', content: `Research context: ${research}\n\nGenerate Roblox Lua code for: ${prompt}` };
+                ? { role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: image } }] }
+                : { role: 'user', content: prompt };
             const generatedCode = await callNVIDIA([{ role: 'system', content: codeSysPrompt }, codeMsg], apiKey, model);
             const cleanCode = generatedCode.replace(/```lua\n?/g, '').replace(/```/g, '').trim();
-            sendEvent('stage', { id: 'generate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
-
-            // Stage 4: Validate
-            sendEvent('stage', { id: 'validate', status: 'active' });
-            await sleep(300);
-            sendEvent('stage', { id: 'validate', status: 'done', duration: ((Date.now() - startTime) / 1000).toFixed(1) });
 
             const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
             const codeId = generateCodeId();

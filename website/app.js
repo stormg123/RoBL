@@ -578,73 +578,22 @@ removeImageBtn?.addEventListener('click', () => {
     imageInput.value = ''
 })
 
-// ==================== THINKING STAGES ====================
-let thinkingEl = null
-let stageTimers = {}
+// ==================== LOADING ====================
+let loadingEl = null
 
-function showThinkingStages() {
-    if (thinkingEl) thinkingEl.remove()
+function showLoading() {
+    hideLoading()
     const el = document.createElement('div')
     el.className = 'thinking'
     el.id = 'thinkingContainer'
-    el.innerHTML = `
-        <div class="thinking-header">
-            <span class="thinking-spinner"></span>
-            Processing request...
-        </div>
-        <div class="thinking-stages" id="thinkingStages">
-            <div class="t-stage" data-stage="scan">
-                <span class="t-icon">🔍</span>
-                <span class="t-label">Scanning workspace...</span>
-                <span class="t-status"></span>
-            </div>
-            <div class="t-stage" data-stage="research">
-                <span class="t-icon">📚</span>
-                <span class="t-label">Researching toolbox...</span>
-                <span class="t-status"></span>
-            </div>
-            <div class="t-stage" data-stage="generate">
-                <span class="t-icon">🧠</span>
-                <span class="t-label">Generating Lua code...</span>
-                <span class="t-status"></span>
-            </div>
-            <div class="t-stage" data-stage="validate">
-                <span class="t-icon">🔬</span>
-                <span class="t-label">Validating output...</span>
-                <span class="t-status"></span>
-            </div>
-        </div>
-    `
+    el.innerHTML = `<div class="thinking-header"><span class="thinking-spinner"></span>Thinking...</div>`
     messages.appendChild(el)
     chatScroll.scrollTop = chatScroll.scrollHeight
-    return el
+    loadingEl = el
 }
 
-function updateStage(stageId, status, duration) {
-    const stage = document.querySelector(`.t-stage[data-stage="${stageId}"]`)
-    if (!stage) return
-    const statusEl = stage.querySelector('.t-status')
-    stage.className = 't-stage ' + status
-    if (status === 'active') {
-        const start = Date.now()
-        stageTimers[stageId] = setInterval(() => {
-            const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-            statusEl.textContent = elapsed + 's'
-        }, 100)
-        statusEl.textContent = '...'
-    } else if (status === 'done') {
-        if (stageTimers[stageId]) { clearInterval(stageTimers[stageId]); delete stageTimers[stageId] }
-        statusEl.textContent = '✅ ' + duration + 's'
-    } else if (status === 'error') {
-        if (stageTimers[stageId]) { clearInterval(stageTimers[stageId]); delete stageTimers[stageId] }
-        statusEl.textContent = '❌'
-    }
-}
-
-function removeThinkingStages() {
-    if (thinkingEl) { thinkingEl.remove(); thinkingEl = null }
-    Object.values(stageTimers).forEach(clearInterval)
-    stageTimers = {}
+function hideLoading() {
+    if (loadingEl) { loadingEl.remove(); loadingEl = null }
 }
 
 function parseSSEBuffer(buffer) {
@@ -689,7 +638,7 @@ async function generate() {
     sendBtn.disabled = true
     sendBtn.classList.add('loading')
 
-    showThinkingStages()
+    showLoading()
 
     try {
         const r = await fetch(`${API_BASE}/generate?session=${session}`, {
@@ -715,17 +664,15 @@ async function generate() {
             buffer = remaining
 
             for (const ev of events) {
-                if (ev.event === 'stage') {
-                    updateStage(ev.data.id, ev.data.status, ev.data.duration)
-                    chatScroll.scrollTop = chatScroll.scrollHeight
-                } else if (ev.event === 'text') {
+                if (ev.event === 'text') {
+                    hideLoading()
                     addMessage('ai', ev.data.text || ev.data.code)
                     chatScroll.scrollTop = chatScroll.scrollHeight
                     if (ev.data.recommendations?.length) {
                         renderRecommendations(ev.data.recommendations)
                     }
                 } else if (ev.event === 'complete') {
-                    removeThinkingStages()
+                    hideLoading()
                     if (mode === 'plan') {
                         toast('Planning complete (' + ev.data.totalTime + 's)', 'success')
                     } else {
@@ -733,14 +680,14 @@ async function generate() {
                         toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
                     }
                 } else if (ev.event === 'error') {
-                    removeThinkingStages()
+                    hideLoading()
                     addMessage('ai', `❌ ${ev.data.message}`)
                     toast(ev.data.message, 'error')
                 }
             }
         }
     } catch (err) {
-        removeThinkingStages()
+        hideLoading()
         addMessage('ai', `❌ ${err.message}`)
         toast(err.message, 'error')
     } finally {

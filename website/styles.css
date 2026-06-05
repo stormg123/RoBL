@@ -351,19 +351,7 @@ body.light-theme .setting-info span{color:var(--text-secondary)}
     border-bottom:1px solid var(--border)}
 .thinking-spinner{width:14px;height:14px;border:2px solid var(--border);
     border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;flex-shrink:0}
-.thinking-stages{display:flex;flex-direction:column;gap:8px}
-.t-stage{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;
-    font-size:13px;color:var(--text-secondary);transition:all 0.3s var(--ease)}
-.t-stage.done{color:var(--green)}
-.t-stage.active{color:var(--text);background:var(--accent-subtle)}
-.t-stage.error{color:var(--red)}
-.t-icon{flex-shrink:0;font-size:14px;width:20px;text-align:center}
-.t-label{flex:1;font-weight:500}
-.t-status{flex-shrink:0;font-size:11px;font-variant-numeric:tabular-nums;font-weight:500;
-    min-width:50px;text-align:right;font-family:monospace}
-.t-stage.active .t-status{color:var(--accent)}
-.t-stage.done .t-status{color:var(--green)}
-.t-stage.error .t-status{color:var(--red)}
+
 
 /* ======== RESPONSIVE ======== */
 @media(max-width:768px){
@@ -381,7 +369,6 @@ body.light-theme .setting-info span{color:var(--text-secondary)}
     .setting-input-wrap{max-width:160px}
     .setting-input{width:100px}
     .thinking{padding:14px 16px}
-    .t-stage{font-size:12px}
 }
 @media(max-width:480px){
     .sidebar{width:100%;position:fixed;inset:0;z-index:100}
@@ -390,5 +377,4 @@ body.light-theme .setting-info span{color:var(--text-secondary)}
     .msg-bub{font-size:13px;max-width:calc(100% - 10px)!important}
     .msg.ai .msg-bub{max-width:calc(100% - 10px)!important}
     .thinking{margin:8px 4px 0;padding:12px 14px}
-    .t-stage{gap:6px;font-size:11px;padding:4px 6px}
 }
