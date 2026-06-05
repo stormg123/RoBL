@@ -684,8 +684,13 @@ async function generate() {
                     if (ev.data.plan) {
                         toast('Planning complete (' + ev.data.totalTime + 's)', 'success')
                     } else {
-                        addMessage('ai', `✅ Sent to Studio`)
-                        toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
+                        const realUser = session && !session.startsWith('dev-')
+                        if (realUser) {
+                            addMessage('ai', `✅ Sent to Studio`)
+                            toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
+                        } else {
+                            toast('Build complete (' + ev.data.totalTime + 's)', 'success')
+                        }
                         if (ev.data.summary) {
                             addMessage('ai', `Built: ${ev.data.summary}`)
                         }
