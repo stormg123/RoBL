@@ -158,6 +158,7 @@ function showDashboard() {
         avatar.onerror = () => { avatar.src = '' }
     }
     syncApiKeyFields()
+    loadModels(getApiKey())
     loadSavedChats()
     renderSidebar()
     applyTheme()
