@@ -207,6 +207,19 @@ app.get('/api/code/latest', (req, res) => {
     });
 });
 
+const AVAILABLE_MODELS = [
+    { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Llama 3.1 Nemotron 70B', provider: 'NVIDIA' },
+    { id: 'nvidia/llama-3.1-nemotron-8b-instruct', name: 'Llama 3.1 Nemotron 8B', provider: 'NVIDIA' },
+    { id: 'meta/llama-3.1-405b-instruct', name: 'Llama 3.1 405B', provider: 'Meta' },
+    { id: 'meta/llama-3.1-70b-instruct', name: 'Llama 3.1 70B', provider: 'Meta' },
+    { id: 'mistralai/mistral-large', name: 'Mistral Large', provider: 'Mistral' },
+    { id: 'google/gemma-2-27b-it', name: 'Gemma 2 27B', provider: 'Google' },
+];
+
+app.get('/api/models', (req, res) => {
+    res.json({ models: AVAILABLE_MODELS });
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
 });
