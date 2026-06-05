@@ -1,165 +1,153 @@
 # RoBl — AI Code Generator for Roblox Studio
 
-Generate Lua scripts using NVIDIA NIM and push them directly to Roblox Studio via a plugin.
+Generate Lua scripts using NVIDIA NIM and push them directly to Roblox Studio via a plugin. Log in with Roblox OAuth, type a prompt, and get production-ready code.
 
 ## Project Structure
 
 ```
 Desktop/robl/
 ├── website/              # Frontend (deploy to Netlify)
-│   ├── index.html
-│   ├── styles.css
-│   ├── app.js
-│   ├── privacy.html
-│   └── terms.html
-├── api/                  # Backend (deploy to Render/Railway)
-│   ├── server.js
-│   └── package.json
-└── plugin/               # Roblox Studio plugin (source .lua)
-    └── RoBlPlugin.lua
+│   ├── index.html        # Landing page
+│   ├── login.html        # Auth + dashboard SPA
+│   ├── styles.css        # App styling
+│   ├── app.js            # Frontend logic
+│   ├── privacy.html      # Privacy policy
+│   └── terms.html        # Terms of service
+├── api/                  # Backend (deployed to Render)
+│   ├── server.js         # Express server (OAuth, AI gen, code delivery)
+│   └── package.json      # Dependencies
+└── plugin/               # Roblox Studio plugin
+    └── RoBlPlugin.lua    # Polls API, inserts code into place
 ```
 
----
+## Architecture
 
-## Step-by-Step Setup
+- **Landing page** (`index.html`) — public-facing site with hero, features, reviews, CTA
+- **Login/Dashboard** (`login.html`) — OAuth login with Roblox, code generation UI, Monaco editor, history, settings
+- **Backend** (`api/`) — Express server that handles OAuth flow, proxies requests to NVIDIA NIM, and serves code to the Studio plugin via polling
+- **Plugin** (`plugin/`) — Roblox Studio `.lua` plugin that polls the API for pending code and inserts it as a Script or LocalScript
 
-### 1. Create a Roblox OAuth 2.0 App
+The backend also serves the frontend files (`express.static` pointing to `../website`), so a single Render URL works for both.
+
+## Live URLs
+
+| Service | URL |
+|---------|-----|
+| Render API | `https://robl-t4dq.onrender.com` |
+| Netlify (frontend) | `https://robl-ai.netlify.app` _(deploy when ready)_ |
+
+## Setup
+
+### 1. Roblox OAuth App
 
 1. Go to https://create.roblox.com/dashboard/credentials/oauth
 2. Click **Create App**
-3. Fill in these fields:
+3. Fill in:
 
-| Field | Development Value | Production Value |
-|-------|------------------|-----------------|
-| **App Name** | RoBl | RoBl |
-| **Entry Link** | `http://localhost:3000` | `https://yoursite.netlify.app` |
-| **Privacy Policy URL** | `http://localhost:3000/privacy.html` | `https://yoursite.netlify.app/privacy.html` |
-| **Terms of Service URL** | `http://localhost:3000/terms.html` | `https://yoursite.netlify.app/terms.html` |
-| **Callback/Redirect URI** | `http://localhost:3000/auth/roblox/callback` | `https://your-api.onrender.com/auth/roblox/callback` |
+| Field | Development | Production |
+|-------|-------------|------------|
+| **Entry Link** | `http://localhost:3000` | `https://robl-ai.netlify.app` |
+| **Privacy Policy URL** | `http://localhost:3000/privacy.html` | `https://robl-ai.netlify.app/privacy.html` |
+| **Terms of Service URL** | `http://localhost:3000/terms.html` | `https://robl-ai.netlify.app/terms.html` |
+| **Callback URI** | `http://localhost:3000/auth/roblox/callback` | `https://robl-t4dq.onrender.com/auth/roblox/callback` |
 
 4. Set **Scopes** to `profile` (or `openid profile`)
-5. After creation, copy the **Client ID** and **Client Secret**
+5. Category: **Creation & Productivity Tools**
+6. Save the **Client ID** and **Client Secret**
 
-### 2. Configure the Backend
+### 2. Environment Variables (Render)
 
-Open `api/server.js` and replace these values at the top:
+| Variable | Value |
+|----------|-------|
+| `CLIENT_ID` | Your Roblox OAuth client ID |
+| `CLIENT_SECRET` | Your Roblox OAuth client secret |
+| `BASE_URL` | `https://robl-t4dq.onrender.com` |
 
-```js
-const CLIENT_ID = 'YOUR_ROBLOX_OAUTH_CLIENT_ID'
-const CLIENT_SECRET = 'YOUR_ROBLOX_OAUTH_CLIENT_SECRET'
-```
+The server reads these from `process.env` — never hardcoded.
 
-### 3. Run Locally (Development)
+### 3. Run Locally
 
 ```bash
 cd api
 npm install
-npm start
+# Set env vars or edit fallbacks in server.js
+CLIENT_ID=your_id CLIENT_SECRET=your_secret npm start
 ```
 
-- Backend starts at `http://localhost:3000`
-- Open that URL in your browser
+Open `http://localhost:3000` — the backend serves both the API and the website.
 
-### 4. Configure the Frontend for Deployment
+### 4. Deploy to Render (Backend)
 
-Open `website/app.js` and change the production API URL:
-
-```js
-const API_URL = window.location.hostname === 'localhost'
-    ? 'http://localhost:3000'
-    : 'https://your-api.onrender.com'  // ← change this to your backend URL
-```
-
-### 5. Deploy the Backend (API)
-
-**Option A: Render.com (recommended)**
-1. Push `api/` folder (or whole repo) to a GitHub repo
+1. Push to GitHub
 2. Go to https://dashboard.render.com → New Web Service
 3. Connect your repo
-4. Settings:
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-   - Environment Variable: `PORT=3000`
-5. Deploy → you get a URL like `https://robl-api.onrender.com`
+4. Set **Root Directory** to `api`
+5. Build Command: `npm install`
+6. Start Command: `npm start`
+7. Add environment variables: `CLIENT_ID`, `CLIENT_SECRET`, `BASE_URL`
+8. Deploy → `https://your-app.onrender.com`
 
-**Option B: Railway.app**
+### 5. Deploy to Netlify (Frontend)
+
 1. Push to GitHub
-2. Go to https://railway.app → New Project → Deploy from GitHub
-3. Railway auto-detects Node.js
-
-### 6. Deploy the Frontend (Website)
-
-1. Push `website/` folder to a GitHub repo
 2. Go to https://app.netlify.com → Add new site → Import from GitHub
 3. Select your repo
-4. Deploy settings:
+4. Settings:
    - Base directory: `website`
    - Publish directory: `website`
-   - No build command needed
-5. Deploy → you get a URL like `https://yoursite.netlify.app`
-6. (Optional) Set a custom domain
+   - No build command
+5. Deploy → `https://your-site.netlify.app`
 
-### 7. Update OAuth App with Production URLs
+If the Netlify URL differs from `robl-ai.netlify.app`, update the CORS origins in `api/server.js`.
 
-After deploying both frontend and backend, go back to the Roblox OAuth dashboard and update:
-
-| Field | Production Value |
-|-------|-----------------|
-| **Entry Link** | `https://yoursite.netlify.app` |
-| **Privacy Policy URL** | `https://yoursite.netlify.app/privacy.html` |
-| **Terms of Service URL** | `https://yoursite.netlify.app/terms.html` |
-| **Callback URI** | `https://your-api.onrender.com/auth/roblox/callback` |
-
-### 8. Install the Roblox Studio Plugin
+### 6. Install Studio Plugin
 
 1. Open **Roblox Studio**
-2. Go to **Plugins** → **Plugin Manager**
-3. Click **Add from Folder**
-4. Select the `plugin/` folder containing `RoBlPlugin.lua`
-5. The **RoBl AI** toolbar button appears in Studio
+2. Plugins → Plugin Manager → **Add from Folder**
+3. Select the `plugin/` folder containing `RoBlPlugin.lua`
+4. A **RoBl AI** button appears in the Plugins toolbar
 
-### 9. How to Use
-
-1. Start your backend: `cd api && npm start`
-2. Open the website (Netlify URL or `http://localhost:3000`)
-3. Click **Log in with Roblox** → authorize the app
-4. Enter your **NVIDIA NIM API Key** and click **Save**
-5. Type a prompt like "Create a part that changes color when touched"
-6. Click **Generate** → AI writes the Lua code
-7. Open **Roblox Studio** → click the **RoBl AI** toolbar button
-8. Enter your **Roblox User ID** (from your profile URL) and click **Connect**
-9. Back on the website, click **Send to Studio**
-10. The plugin fetches the code and asks how to insert it (Script / LocalScript / Cancel)
-
-### 10. Get an NVIDIA NIM API Key
+### 7. Get an NVIDIA NIM API Key
 
 1. Go to https://build.nvidia.com/explore/discover
-2. Sign up or log in
-3. Navigate to any model (e.g., Llama 3.1 Nemotron)
-4. Click **Get API Key** → generate a new key
-5. Copy the key starting with `nvapi-...`
+2. Sign up/log in
+3. Pick any model (e.g., Llama 3.1 Nemotron 70B)
+4. Click **Get API Key** → generate one
+5. Copy the key (`nvapi-...`)
 
----
+### 8. Usage
 
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| OAuth callback fails | Make sure the Callback URI in Roblox matches EXACTLY what's in server.js (including trailing slash) |
-| Plugin can't connect | The plugin polls the API URL. Make sure the backend is running and accessible from Studio |
-| "Failed to generate code" | Check your NVIDIA NIM API key is valid and has credits |
-| CORS errors | The backend server has `cors()` middleware enabled — it should work for localhost |
-| Login redirects to localhost | Change `API_URL` in `app.js` to your production backend URL |
-
----
+1. Open the website (Netlify URL or `http://localhost:3000`)
+2. Click **Log in with Roblox** → authorize
+3. Enter your **NVIDIA NIM API Key** and click **Save**
+4. Type a prompt (e.g., "Create a door that slides open when clicked")
+5. Click **Generate** → AI writes the Lua code
+6. In Studio, click the **RoBl AI** toolbar button
+7. Enter your **Roblox User ID** (from your profile URL) and click **Connect**
+8. Back on the website, click **Send to Studio**
+9. The plugin fetches the code and asks how to insert it (Script / LocalScript / Cancel)
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/auth/roblox` | Redirect to Roblox OAuth login |
-| GET | `/auth/roblox/callback` | OAuth callback (exchanges code for token) |
+| GET | `/auth/roblox` | Redirect to Roblox OAuth |
+| GET | `/auth/roblox/callback` | OAuth callback → redirects to `login.html?session=...` |
 | GET | `/api/me?session=...` | Get current user info |
 | POST | `/api/generate` | Generate code via NVIDIA NIM |
-| GET | `/api/code/latest?robloxId=...` | Get pending code for plugin |
+| GET | `/api/code/latest?robloxId=...` | Poll for pending code (used by plugin) |
 | GET | `/api/health` | Health check |
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| OAuth callback fails | Callback URI must match EXACTLY in Roblox dashboard and server.js |
+| Plugin can't connect | Ensure backend is running and accessible; check the API URL in the plugin |
+| "Failed to generate code" | Check your NVIDIA NIM API key is valid |
+| CORS errors | Update `api/server.js` with your Netlify URL in the `origin` array |
+| Login redirects to wrong page | OAuth callback in `server.js` redirects to `login.html?session=...` — make sure `login.html` exists |
+
+---
+
+Made by **StormPieWormPie**
