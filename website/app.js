@@ -166,6 +166,7 @@ function showDashboard() {
     startPluginPolling()
     checkNimModal()
     updateSyncLock()
+    showOnboardingTips()
 }
 
 function setScreen(name) {
@@ -262,6 +263,30 @@ function updateSyncLock() {
         prompt.disabled = true
         sendBtn.disabled = true
     }
+}
+
+// ==================== ONBOARDING TIPS ====================
+function showOnboardingTips() {
+    if (localStorage.getItem('robl_tips_done')) return
+    const overlay = document.createElement('div')
+    overlay.className = 'tips-overlay'
+    overlay.innerHTML = `
+        <div class="tips-card">
+            <h3>Welcome to RoBl 🧊</h3>
+            <ul>
+                <li><strong>Tab</strong> — toggle between <strong>Plan</strong> (discuss ideas) and <strong>Build</strong> (generate code for Studio)</li>
+                <li><strong>Type a prompt</strong> in the chat bar — describe what you want to build</li>
+                <li><strong>Plan mode</strong> discusses ideas and suggests scripts — click a suggestion to build it</li>
+                <li><strong>Build mode</strong> generates Lua code and sends it to your Studio plugin in real time</li>
+            </ul>
+            <button class="btn btn-primary btn-block" id="dismissTips">Got it</button>
+        </div>
+    `
+    document.body.appendChild(overlay)
+    overlay.querySelector('#dismissTips').addEventListener('click', () => {
+        overlay.remove()
+        localStorage.setItem('robl_tips_done', '1')
+    })
 }
 
 // ==================== MODE (plan / build) ====================
@@ -689,6 +714,7 @@ async function generate() {
                             addMessage('ai', `✅ Sent to Studio`)
                             toast('Code sent to Roblox Studio (' + ev.data.totalTime + 's)', 'success')
                         } else {
+                            addMessage('ai', `✅ Build complete`)
                             toast('Build complete (' + ev.data.totalTime + 's)', 'success')
                         }
                         if (ev.data.summary) {

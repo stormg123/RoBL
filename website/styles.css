@@ -311,6 +311,22 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 .nim-link{display:inline-block;font-size:12px;color:var(--accent);text-decoration:none;margin-top:4px}
 .nim-link:hover{text-decoration:underline}
 
+/* ======== ONBOARDING TIPS ======== */
+.tips-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);
+    display:flex;align-items:center;justify-content:center;padding:20px;
+    animation:fadeIn 0.3s var(--ease)}
+.tips-card{background:var(--bg-elevated);border:1px solid var(--border);border-radius:16px;
+    padding:32px;max-width:420px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.5);
+    animation:scaleIn 0.4s var(--bounce)}
+.tips-card h3{font-size:20px;font-weight:800;margin-bottom:18px;letter-spacing:-0.03em}
+.tips-card ul{list-style:none;padding:0;margin:0 0 22px;display:flex;flex-direction:column;gap:12px}
+.tips-card li{font-size:13px;color:var(--text-secondary);line-height:1.6;padding-left:20px;
+    position:relative}
+.tips-card li::before{content:'•';position:absolute;left:4px;color:var(--accent);font-weight:700}
+.tips-card li strong{color:var(--text);font-weight:600}
+.tips-card .btn-block{width:100%}
+body.light-theme .tips-card{box-shadow:0 24px 80px rgba(0,0,0,0.15)}
+
 /* ======== PIXEL FONT ======== */
 .pixel-next{font-family:'Press Start 2P',monospace;font-size:10px;display:inline-block;color:var(--accent);
     background:linear-gradient(135deg,var(--accent),#00e5bf);
