@@ -300,12 +300,15 @@ async function handleStreamingGenerate(req, res, session, prompt, apiKey, model,
             sendEvent('complete', { success: true, plan: true, totalTime });
         } else {
             // Intent classification — is this a build request or casual chat?
-            const intentPrompt = 'Reply with exactly one word: "build" if the user is asking to create, make, generate, build, or script something in Roblox. Reply "chat" for greetings, questions, chit-chat, or anything not about building.';
+            const intentPrompt = `Reply ONLY with the word "build" or "chat". Reply "build" if the user wants to CREATE, MAKE, GENERATE, or SCRIPT something in Roblox Studio (like making a sword, creating a door, writing a script, building a game). Reply "chat" ONLY for greetings like "hi", casual conversation, or things completely unrelated to Roblox. Do NOT explain — just one word.
+Examples: "make a sword" → build | "create a door" → build | "write a script" → build | "hi" → chat | "what can you do" → chat
+User: ${prompt}`;
             const intentResponse = await callNVIDIA([
-                { role: 'system', content: 'You are a strict classifier. Output only one word: "build" or "chat".' },
-                { role: 'user', content: `${intentPrompt}\nUser: ${prompt}` }
-            ], apiKey, model, 5);
-            const isBuild = intentResponse.trim().toLowerCase().includes('build');
+                { role: 'system', content: 'Output ONLY the single word "build" or "chat" with no other text.' },
+                { role: 'user', content: intentPrompt }
+            ], apiKey, model, 10);
+            const isBuild = intentResponse.trim().toLowerCase().startsWith('build')
+                || /\b(make|create|build|generate|script|code|spawn|add|insert)\b/i.test(prompt);
 
             if (!isBuild) {
                 const chatSysPrompt = 'You are a helpful Roblox assistant. Respond conversationally and naturally. Do not generate Lua code.';
