@@ -27,7 +27,7 @@ const REDIRECT_URI = BASE_URL + '/auth/roblox/callback';
 
 const app = express();
 app.use(cors({
-    origin: ['http://localhost:3000', 'https://robl-t4dq.onrender.com', 'https://robl-ai.netlify.app'],
+    origin: ['http://localhost:3000', 'https://robl-t4dq.onrender.com', 'https://robl-gg.netlify.app'],
     credentials: true,
 }));
 app.use(bodyParser.json());

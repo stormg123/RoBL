@@ -34,7 +34,7 @@ The backend also serves the frontend files (`express.static` pointing to `../web
 | Service | URL |
 |---------|-----|
 | Render API | `https://robl-t4dq.onrender.com` |
-| Netlify (frontend) | `https://robl-ai.netlify.app` _(deploy when ready)_ |
+| Netlify (frontend) | `https://robl-gg.netlify.app` |
 
 ## Setup
 
@@ -46,9 +46,9 @@ The backend also serves the frontend files (`express.static` pointing to `../web
 
 | Field | Development | Production |
 |-------|-------------|------------|
-| **Entry Link** | `http://localhost:3000` | `https://robl-ai.netlify.app` |
-| **Privacy Policy URL** | `http://localhost:3000/privacy.html` | `https://robl-ai.netlify.app/privacy.html` |
-| **Terms of Service URL** | `http://localhost:3000/terms.html` | `https://robl-ai.netlify.app/terms.html` |
+| **Entry Link** | `http://localhost:3000` | `https://robl-gg.netlify.app` |
+| **Privacy Policy URL** | `http://localhost:3000/privacy.html` | `https://robl-gg.netlify.app/privacy.html` |
+| **Terms of Service URL** | `http://localhost:3000/terms.html` | `https://robl-gg.netlify.app/terms.html` |
 | **Callback URI** | `http://localhost:3000/auth/roblox/callback` | `https://robl-t4dq.onrender.com/auth/roblox/callback` |
 
 4. Set **Scopes** to `profile` (or `openid profile`)
@@ -98,7 +98,7 @@ Open `http://localhost:3000` — the backend serves both the API and the website
    - No build command
 5. Deploy → `https://your-site.netlify.app`
 
-If the Netlify URL differs from `robl-ai.netlify.app`, update the CORS origins in `api/server.js`.
+If the Netlify URL changes, update the CORS origins in `api/server.js`.
 
 ### 6. Install Studio Plugin
 
