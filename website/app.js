@@ -74,6 +74,18 @@ function getSession() {
 async function checkAuth() {
     session = getSession()
     if (!session) return showAuth()
+
+    // Dev backdoor — skip OAuth
+    if (session.startsWith('dev-')) {
+        const stored = localStorage.getItem('robl_dev_user')
+        if (stored) {
+            user = JSON.parse(stored)
+            showDashboard()
+            return
+        }
+        return showAuth()
+    }
+
     try {
         const r = await fetch(`${API_BASE}/me?session=${session}`)
         if (!r.ok) { localStorage.removeItem('robl_session'); return showAuth() }
@@ -99,6 +111,19 @@ function showDashboard() {
 }
 
 loginBtn.addEventListener('click', () => window.location.href = API_URL + '/auth/roblox')
+
+// Backdoor dev access (bypasses OAuth for testing)
+document.getElementById('backdoorLink')?.addEventListener('click', (e) => {
+    e.preventDefault()
+    const fakeSession = 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+    localStorage.setItem('robl_session', fakeSession)
+    localStorage.setItem('robl_dev_user', JSON.stringify({
+        robloxId: '123456',
+        displayName: 'DevUser',
+        profileUrl: 'https://www.roblox.com/users/123456/profile',
+    }))
+    window.location.reload()
+})
 
 logoutBtn.addEventListener('click', () => {
     localStorage.removeItem('robl_session'); session = null; user = null; showAuth()

@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RoBl — AI for Roblox Studio</title>
+    <title>RoBl — AI-powered Roblox scripting</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧊</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
@@ -111,49 +112,60 @@
         .demo-dot.y{background:#f59e0b}
         .demo-dot.g{background:#22c55e}
         .demo-title-text{font-size:12px;color:var(--text-muted);margin-left:8px;font-weight:500}
-        .demo-body{display:flex;min-height:420px}
-        .demo-main{flex:1;padding:24px}
-        .demo-sidebar{width:280px;background:#0a0a0d;border-left:1px solid var(--border);padding:20px;display:flex;flex-direction:column;gap:16px}
-        .demo-prompt{background:#131316;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;min-height:90px}
-        .demo-prompt-line{height:10px;border-radius:5px;background:#1f1f23;margin-bottom:10px;animation:shimmer 2s ease-in-out infinite}
-        .demo-prompt-line:last-child{width:60%;margin-bottom:0}
-        .demo-prompt-line-short{width:45%}
-        @keyframes shimmer{0%,100%{opacity:0.5}50%{opacity:1}}
-        .demo-actions{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-        .demo-model{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#131316;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-secondary)}
-        .demo-model svg{width:14px;height:14px}
-        .demo-generate-btn{display:flex;align-items:center;gap:6px;padding:8px 18px;font-size:13px;font-weight:600;font-family:inherit;
-            background:linear-gradient(135deg,var(--accent),#00e5bf);color:#000;border:none;border-radius:8px;cursor:pointer;
-            transition:all 0.3s;position:relative;overflow:hidden}
-        .demo-generate-btn:hover{transform:scale(1.03);box-shadow:0 0 24px rgba(0,212,170,0.3)}
-        .demo-output{background:#131316;border:1px solid var(--border);border-radius:10px;padding:16px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.8;overflow:hidden}
-        .demo-output .line{opacity:0;animation:typeLine 0.3s ease forwards;white-space:pre}
-        .demo-output .line:nth-child(1){animation-delay:0.8s}
-        .demo-output .line:nth-child(2){animation-delay:1s}
-        .demo-output .line:nth-child(3){animation-delay:1.2s}
-        .demo-output .line:nth-child(4){animation-delay:1.4s}
-        .demo-output .line:nth-child(5){animation-delay:1.6s}
-        .demo-output .line:nth-child(6){animation-delay:1.8s}
-        .demo-output .line:nth-child(7){animation-delay:2s}
-        .demo-output .line:nth-child(8){animation-delay:2.2s}
-        .demo-output .blinking-cursor{display:inline-block;width:2px;height:14px;background:var(--accent);margin-left:2px;vertical-align:text-bottom;
-            animation:blink 0.8s step-end infinite}
+        .demo-chat-layout{display:flex;flex-direction:column;min-height:460px}
+        .demo-chat-nav{display:flex;align-items:center;justify-content:space-between;
+            padding:10px 16px;background:#121214;border-bottom:1px solid var(--border)}
+        .demo-chat-logo{font-size:15px;font-weight:800;letter-spacing:-0.03em;
+            background:linear-gradient(135deg,#fff 30%,var(--accent));
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .demo-chat-model{font-size:11px;color:var(--text-secondary);padding:4px 10px;
+            background:#1a1a1e;border:1px solid var(--border);border-radius:4px}
+        .demo-chat-right{display:flex;align-items:center;gap:10px}
+        .demo-chat-status{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px rgba(34,197,94,0.4)}
+        .demo-chat-avatar{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#00e5bf);
+            display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000}
+        .demo-chat-body{flex:1;padding:16px;display:flex;flex-direction:column;gap:14px;overflow:hidden;background:#0c0c0f}
+        .demo-msg{display:flex;gap:10px;max-width:100%}
+        .demo-msg.user{flex-direction:row-reverse}
+        .demo-msg-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+            font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px}
+        .demo-msg-avatar.user{background:linear-gradient(135deg,var(--accent),#00e5bf);color:#000}
+        .demo-msg-avatar.ai{background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff}
+        .demo-msg-bubble{padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.5}
+        .demo-msg-bubble.user{background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.12);color:var(--text-secondary);max-width:70%}
+        .demo-msg-bubble.ai{background:#111113;border:1px solid var(--border);max-width:80%}
+        .demo-msg-label{font-size:11px;font-weight:600;color:var(--accent);margin-bottom:4px}
+        .demo-code-block{border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-top:6px}
+        .demo-code-header{display:flex;align-items:center;justify-content:space-between;
+            padding:5px 10px;background:#18181b;font-size:10px;color:var(--text-muted);border-bottom:1px solid var(--border)}
+        .demo-code-body{padding:10px 12px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;line-height:1.7;background:#0f0f12}
+        .code-line{opacity:0;animation:typeLine 0.25s ease forwards}
+        .code-line:nth-child(1){animation-delay:0.6s}
+        .code-line:nth-child(2){animation-delay:0.75s}
+        .code-line:nth-child(3){animation-delay:0.9s}
+        .code-line:nth-child(4){animation-delay:1.05s}
+        .code-line:nth-child(5){animation-delay:1.2s}
+        .code-line:nth-child(6){animation-delay:1.35s}
+        .code-line:nth-child(7){animation-delay:1.5s}
+        .code-line:nth-child(8){animation-delay:1.65s}
         @keyframes typeLine{to{opacity:1}}
+        .kw{color:#22d3ee}
+        .str{color:#86efac}
+        .num{color:#fbbf24}
+        .cm{color:#6b7280;font-style:italic}
+        .cursor{display:inline-block;width:2px;height:12px;background:var(--accent);margin-left:1px;vertical-align:text-bottom;
+            animation:blink 0.8s step-end infinite}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
-        .demo-side-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px}
-        .demo-status{display:flex;align-items:center;gap:10px;padding:12px;background:#131316;border:1px solid var(--border);border-radius:8px}
-        .demo-status-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px rgba(34,197,94,0.4);animation:pulseDot 2s ease-in-out infinite}
-        .demo-status-text{font-size:13px;font-weight:500;color:#fafafa}
-        .demo-status-sub{font-size:11px;color:var(--text-muted)}
-        .demo-check-btn{padding:8px 16px;font-size:12px;font-weight:600;font-family:inherit;
-            background:var(--accent);color:#000;border:none;border-radius:6px;cursor:pointer;transition:all 0.3s;margin-top:auto}
-        .demo-check-btn:hover{background:var(--accent-hover);transform:scale(1.02)}
-        .demo-side-footer{padding-top:12px;border-top:1px solid var(--border);font-size:10px;color:var(--text-muted);text-align:center}
-        .keyword{color:#22d3ee}
-        .string{color:#86efac}
-        .func{color:#818cf8}
-        .number{color:#fbbf24}
-        .comment{color:#6b7280;font-style:italic}
+        .demo-actions-row{display:flex;gap:4px;margin-top:8px}
+        .demo-action-btn{padding:3px 8px;font-size:10px;font-weight:500;font-family:var(--font);
+            background:#18181b;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:default}
+        .demo-action-btn.primary{background:rgba(0,212,170,0.1);border-color:rgba(0,212,170,0.15);color:var(--accent)}
+        .demo-chat-bottom{padding:10px 14px 12px;background:#121214;border-top:1px solid var(--border)}
+        .demo-bottom-row{display:flex;align-items:center;gap:8px;background:#1a1a1e;border:1px solid var(--border);
+            border-radius:8px;padding:8px 10px}
+        .demo-bottom-input{flex:1;font-size:12px;color:var(--text-muted)}
+        .demo-send-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+            background:var(--accent);border:none;border-radius:6px;color:#000;cursor:default}
         .hero-demo-float{animation:demoFloat 6s ease-in-out infinite}
         @keyframes demoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 
@@ -248,16 +260,15 @@
             .hero{padding:60px 24px 40px}
             .brands-row{gap:24px}
             .brands-row span{font-size:16px}
-            .demo-body{flex-direction:column}
-            .demo-sidebar{width:100%;border-left:none;border-top:1px solid var(--border)}
+            .demo-chat-body{padding:12px}
             .stats-grid{gap:32px}
             .stat-number{font-size:36px}
         }
         @media(max-width:480px){
             .hero h1{font-size:28px}
             .hero p{font-size:16px}
-            .demo-main{padding:16px}
-            .demo-output{font-size:11px}
+            .demo-chat-body{padding:10px}
+            .demo-msg-bubble{font-size:11px}
         }
     </style>
 </head>
@@ -299,62 +310,57 @@
                 <div class="demo-dot r"></div>
                 <div class="demo-dot y"></div>
                 <div class="demo-dot g"></div>
-                <span class="demo-title-text">RoBl AI — robl-t4dq.onrender.com</span>
+                <span class="demo-title-text">RoBl — robl-gg.netlify.app</span>
             </div>
-            <div class="demo-body">
-                <div class="demo-main">
-                    <div class="demo-prompt">
-                        <div class="demo-prompt-line" style="width:85%"></div>
-                        <div class="demo-prompt-line" style="width:70%"></div>
-                        <div class="demo-prompt-line demo-prompt-line-short"></div>
-                    </div>
-                    <div class="demo-actions">
-                        <div class="demo-model">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                            Llama 3.1 Nemotron 70B
-                        </div>
-                        <div class="demo-generate-btn">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                            Generate
-                        </div>
-                    </div>
-                    <div class="demo-output">
-                        <div class="line"><span class="keyword">local</span> TweenService <span class="keyword">=</span> game:GetService(<span class="string">"TweenService"</span>)</div>
-                        <div class="line"><span class="keyword">local</span> door <span class="keyword">=</span> script.Parent</div>
-                        <div class="line"><span class="keyword">local</span> clickDetector <span class="keyword">=</span> Instance.new(<span class="string">"ClickDetector"</span>)</div>
-                        <div class="line">clickDetector.Parent <span class="keyword">=</span> door</div>
-                        <div class="line"><span class="keyword">local</span> goal <span class="keyword">=</span> {Position <span class="keyword">=</span> door.Position <span class="keyword">+</span> Vector3.new(<span class="number">0</span>, <span class="number">5</span>, <span class="number">0</span>)}</div>
-                        <div class="line"><span class="keyword">local</span> tweenInfo <span class="keyword">=</span> TweenInfo.new(<span class="number">1</span>, Enum.EasingStyle.Quad)</div>
-                        <div class="line"><span class="keyword">local</span> tween <span class="keyword">=</span> TweenService:Create(door, tweenInfo, goal)</div>
-                        <div class="line"><span class="comment">-- Click to slide the door upward</span><span class="blinking-cursor"></span></div>
+            <div class="demo-chat-layout">
+                <div class="demo-chat-nav">
+                    <span class="demo-chat-logo">RoBl</span>
+                    <div class="demo-chat-model">Llama 3.1 Nemotron 70B</div>
+                    <div class="demo-chat-right">
+                        <div class="demo-chat-status online"></div>
+                        <div class="demo-chat-avatar">U</div>
                     </div>
                 </div>
-                <div class="demo-sidebar">
-                    <div>
-                        <div class="demo-side-label">Plugin Status</div>
-                        <div class="demo-status" style="margin-top:10px">
-                            <div class="demo-status-dot"></div>
-                            <div>
-                                <div class="demo-status-text">Connected</div>
-                                <div class="demo-status-sub">Studio plugin online</div>
+                <div class="demo-chat-body">
+                    <div class="demo-msg user">
+                        <div class="demo-msg-avatar user">U</div>
+                        <div class="demo-msg-bubble user">Create a door that slides open when clicked using TweenService</div>
+                    </div>
+                    <div class="demo-msg ai">
+                        <div class="demo-msg-avatar ai">A</div>
+                        <div class="demo-msg-bubble ai">
+                            <div class="demo-msg-label">RoBl</div>
+                            <div class="demo-code-block">
+                                <div class="demo-code-header">
+                                    <span>&lt;/&gt; Lua</span>
+                                    <span>157 chars</span>
+                                </div>
+                                <div class="demo-code-body">
+                                    <div class="code-line"><span class="kw">local</span> TweenService <span class="kw">=</span> game:GetService(<span class="str">"TweenService"</span>)</div>
+                                    <div class="code-line"><span class="kw">local</span> door <span class="kw">=</span> script.Parent</div>
+                                    <div class="code-line"><span class="kw">local</span> clickDetector <span class="kw">=</span> Instance.new(<span class="str">"ClickDetector"</span>)</div>
+                                    <div class="code-line">clickDetector.Parent <span class="kw">=</span> door</div>
+                                    <div class="code-line"><span class="kw">local</span> goal <span class="kw">=</span> {Position <span class="kw">=</span> door.Position <span class="kw">+</span> Vector3.new(<span class="num">0</span>, <span class="num">5</span>, <span class="num">0</span>)}</div>
+                                    <div class="code-line"><span class="kw">local</span> tweenInfo <span class="kw">=</span> TweenInfo.new(<span class="num">1</span>, Enum.EasingStyle.Quad)</div>
+                                    <div class="code-line"><span class="kw">local</span> tween <span class="kw">=</span> TweenService:Create(door, tweenInfo, goal)</div>
+                                    <div class="code-line"><span class="cm">-- Click to slide the door upward</span><span class="cursor">|</span></div>
+                                </div>
+                            </div>
+                            <div class="demo-actions-row">
+                                <span class="demo-action-btn">Copy</span>
+                                <span class="demo-action-btn primary">Send to Studio</span>
+                                <span class="demo-action-btn">⟳</span>
                             </div>
                         </div>
                     </div>
-                    <div>
-                        <div class="demo-side-label" style="margin-bottom:10px">Quick Actions</div>
-                        <div style="display:flex;flex-direction:column;gap:6px">
-                            <div style="padding:8px 12px;background:#131316;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:8px">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"/><polygon points="18 2 22 6 12 16 8 16 8 12 18 2"/></svg>
-                                Copy code
-                            </div>
-                            <div style="padding:8px 12px;background:#131316;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:8px">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
-                                Send to Studio
-                            </div>
+                </div>
+                <div class="demo-chat-bottom">
+                    <div class="demo-bottom-row">
+                        <div class="demo-bottom-input">Describe the Roblox script you want to build...</div>
+                        <div class="demo-send-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </div>
                     </div>
-                    <div class="demo-check-btn">Check for new code</div>
-                    <div class="demo-side-footer">robl-t4dq.onrender.com</div>
                 </div>
             </div>
         </div>
